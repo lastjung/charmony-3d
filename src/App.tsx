@@ -28,6 +28,7 @@ export default function App() {
   // Shared Visual State
   const [color, setColor] = useState('#3b82f6');
   const [isRainbow, setIsRainbow] = useState(false);
+  const [isProRain, setIsProRain] = useState(false);
   const [isBloom, setIsBloom] = useState(true);
   const [isOrbit, setIsOrbit] = useState(false);
   const [orbitSpeed, setOrbitSpeed] = useState(1);
@@ -233,7 +234,8 @@ export default function App() {
                   freqX={freqX} freqY={freqY} freqZ={freqZ} 
                   phaseX={phaseX} phaseY={phaseY} phaseZ={phaseZ} 
                   color={color} points={numPointsLissajousMain}
-                  autoRotate={autoRotate} autoRotateSpeed={autoRotateSpeed} rainbow={isRainbow}
+                  autoRotate={autoRotate} autoRotateSpeed={autoRotateSpeed} 
+                  rainbow={isRainbow} isProRain={isProRain}
                   drawProgress={drawProgress} showHead={showHead} cycles={cycles}
                   opacity={opacity}
                 />
@@ -243,7 +245,8 @@ export default function App() {
                     phaseX={phaseX} phaseY={phaseY} phaseZ={phaseZ}
                     multiplier={multiplier} numPoints={numPointsLissajous}
                     color={color} opacity={opacity * 0.5}
-                    autoRotate={autoRotate} autoRotateSpeed={autoRotateSpeed} rainbow={isRainbow}
+                    autoRotate={autoRotate} autoRotateSpeed={autoRotateSpeed} 
+                    rainbow={isRainbow} isProRain={isProRain}
                     drawProgress={drawProgress} cycles={cycles}
                   />
                 )}
@@ -252,7 +255,7 @@ export default function App() {
               <LorenzAttractor 
                 sigma={sigma} rho={rho} beta={beta} 
                 speed={lorenzSpeed} numPoints={numPointsLorenz}
-                color={color} isRainbow={isRainbow}
+                color={color} isRainbow={isRainbow} isProRain={isProRain}
                 drawProgress={drawProgress} audioVolume={audioVolume}
                 opacity={opacity}
                 autoRotate={autoRotate}
@@ -437,13 +440,31 @@ export default function App() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Appearance</span>
-                      <button 
-                        onClick={() => setIsRainbow(!isRainbow)} 
-                        className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all ${isRainbow ? 'bg-gradient-to-r from-red-500 via-green-500 to-blue-500 text-white border-white/20 shadow-lg' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
-                      >
-                        <Sparkles size={10} />
-                        <span className="text-[9px] font-bold uppercase">Rainbow</span>
-                      </button>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button 
+                          onClick={() => {
+                            const next = !isRainbow;
+                            setIsRainbow(next);
+                            if (next) setIsProRain(false);
+                          }} 
+                          className={`flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${isRainbow ? 'bg-gradient-to-r from-red-500 via-green-500 to-blue-500 text-white border-white/20 shadow-lg' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+                        >
+                          <Sparkles size={10} />
+                          <span className="text-[9px] font-bold uppercase">Rainbow</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => {
+                            const next = !isProRain;
+                            setIsProRain(next);
+                            if (next) setIsRainbow(false);
+                          }} 
+                          className={`flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${isProRain ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white border-white/20 shadow-lg' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+                        >
+                          <Layers size={10} />
+                          <span className="text-[9px] font-bold uppercase">Pro Rain</span>
+                        </button>
+                      </div>
                     </div>
                     {!isRainbow && (
                       <div className="grid grid-cols-5 gap-2">

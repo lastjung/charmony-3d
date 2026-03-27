@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { getProRainColor } from '../utils/colorUtils';
 
 interface LissajousCurveProps {
   freqX: number;
@@ -18,6 +19,7 @@ interface LissajousCurveProps {
   cycles?: number;
   opacity?: number;
   autoRotateSpeed?: number;
+  isProRain?: boolean;
 }
 
 export const LissajousCurve: React.FC<LissajousCurveProps> = ({
@@ -36,6 +38,7 @@ export const LissajousCurve: React.FC<LissajousCurveProps> = ({
   showHead = false,
   cycles = 10,
   opacity = 0.8,
+  isProRain = false,
 }) => {
   const lineRef = useRef<THREE.Line>(null);
   const headRef = useRef<THREE.Mesh>(null);
@@ -57,21 +60,24 @@ export const LissajousCurve: React.FC<LissajousCurveProps> = ({
       pts.push(pos);
       lastPos = pos;
       
-      if (rainbow) {
+      if (isProRain) {
+        const [r, g, b] = getProRainColor(i / points);
+        cols.push(r, g, b);
+      } else if (rainbow) {
         colorObj.setHSL(i / points, 0.8, 0.5);
         cols.push(colorObj.r, colorObj.g, colorObj.b);
       }
     }
     return { curvePoints: pts, colors: cols, headPos: lastPos };
-  }, [freqX, freqY, freqZ, phaseX, phaseY, phaseZ, points, rainbow, drawProgress, cycles]);
+  }, [freqX, freqY, freqZ, phaseX, phaseY, phaseZ, points, rainbow, isProRain, drawProgress, cycles]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry().setFromPoints(curvePoints);
-    if (rainbow && colors.length > 0) {
+    if ((rainbow || isProRain) && colors.length > 0) {
       geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     }
     return geo;
-  }, [curvePoints, colors, rainbow]);
+  }, [curvePoints, colors, rainbow, isProRain]);
 
   useFrame(() => {
     if (lineRef.current && autoRotate) {
@@ -84,16 +90,17 @@ export const LissajousCurve: React.FC<LissajousCurveProps> = ({
   });
 
   const lineObject = useMemo(() => {
+    const useVertexColors = rainbow || isProRain;
     return new THREE.Line(
       geometry, 
       new THREE.LineBasicMaterial({ 
-        color: rainbow ? 0xffffff : color, 
-        vertexColors: rainbow,
+        color: useVertexColors ? 0xffffff : color, 
+        vertexColors: useVertexColors,
         transparent: true, 
         opacity: opacity 
       })
     );
-  }, [geometry, color, rainbow, opacity]);
+  }, [geometry, color, rainbow, isProRain, opacity]);
 
   return (
     <group>
@@ -104,8 +111,8 @@ export const LissajousCurve: React.FC<LissajousCurveProps> = ({
       {showHead && drawProgress < 1 && (
         <mesh position={headPos} ref={headRef}>
           <sphereGeometry args={[0.15, 16, 16]} />
-          <meshBasicMaterial color={rainbow ? '#ffffff' : color} />
-          <pointLight distance={2} intensity={2} color={color} />
+          <meshBasicMaterial color={(rainbow || isProRain) ? '#ffffff' : color} />
+          <pointLight distance={2} intensity={2} color={(rainbow || isProRain) ? '#ffffff' : color} />
         </mesh>
       )}
     </group>

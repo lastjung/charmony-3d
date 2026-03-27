@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { getProRainColor } from '../utils/colorUtils';
 
 interface LorenzAttractorProps {
   sigma: number;
@@ -16,6 +17,7 @@ interface LorenzAttractorProps {
   autoRotate?: boolean;
   autoRotateSpeed?: number;
   showHead?: boolean;
+  isProRain?: boolean;
 }
 
 const LorenzAttractor: React.FC<LorenzAttractorProps> = ({
@@ -32,6 +34,7 @@ const LorenzAttractor: React.FC<LorenzAttractorProps> = ({
   autoRotate = false,
   autoRotateSpeed = 1,
   showHead = true,
+  isProRain = false,
 }) => {
   const lineRef = useRef<THREE.Line>(null);
   const headRef = useRef<THREE.Mesh>(null);
@@ -122,14 +125,21 @@ const LorenzAttractor: React.FC<LorenzAttractorProps> = ({
     geo.setFromPoints(visiblePoints);
 
     // Color attribute for rainbow effect
-    if (isRainbow) {
+    if (isRainbow || isProRain) {
       const colors = new Float32Array(visiblePoints.length * 3);
       const colorObj = new THREE.Color();
       for (let i = 0; i < visiblePoints.length; i++) {
-        colorObj.setHSL(i / visiblePoints.length, 0.8, 0.5);
-        colors[i * 3] = colorObj.r;
-        colors[i * 3 + 1] = colorObj.g;
-        colors[i * 3 + 2] = colorObj.b;
+        if (isProRain) {
+          const [r, g, b] = getProRainColor(i / visiblePoints.length);
+          colors[i * 3] = r;
+          colors[i * 3 + 1] = g;
+          colors[i * 3 + 2] = b;
+        } else {
+          colorObj.setHSL(i / visiblePoints.length, 0.8, 0.5);
+          colors[i * 3] = colorObj.r;
+          colors[i * 3 + 1] = colorObj.g;
+          colors[i * 3 + 2] = colorObj.b;
+        }
       }
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
@@ -144,14 +154,15 @@ const LorenzAttractor: React.FC<LorenzAttractorProps> = ({
   }, [points, drawProgress]);
 
   const material = useMemo(() => {
+    const useVertexColors = isRainbow || isProRain;
     return new THREE.LineBasicMaterial({
-      color: isRainbow ? 'white' : color,
-      vertexColors: isRainbow,
+      color: useVertexColors ? 'white' : color,
+      vertexColors: useVertexColors,
       transparent: true,
       opacity: opacity,
       linewidth: 1,
     });
-  }, [color, isRainbow, opacity]);
+  }, [color, isRainbow, isProRain, opacity]);
 
   const line = useMemo(() => {
     return new THREE.Line(geometry, material);
@@ -190,8 +201,8 @@ const LorenzAttractor: React.FC<LorenzAttractorProps> = ({
       {showHead && drawProgress < 1 && headPos && (
         <mesh position={headPos} ref={headRef}>
           <sphereGeometry args={[0.08, 16, 16]} />
-          <meshBasicMaterial color={isRainbow ? 'white' : color} />
-          <pointLight distance={2} intensity={2} color={color} />
+          <meshBasicMaterial color={(isRainbow || isProRain) ? 'white' : color} />
+          <pointLight distance={2} intensity={2} color={(isRainbow || isProRain) ? 'white' : color} />
         </mesh>
       )}
     </group>

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { getProRainColor } from '../utils/colorUtils';
 
 interface LissajousModMathProps {
   freqX: number;
@@ -15,6 +16,7 @@ interface LissajousModMathProps {
   opacity: number;
   autoRotate?: boolean;
   rainbow?: boolean;
+  isProRain?: boolean;
   drawProgress?: number;
   cycles?: number;
   autoRotateSpeed?: number;
@@ -34,6 +36,7 @@ export const LissajousModMath: React.FC<LissajousModMathProps> = ({
   autoRotate = false,
   autoRotateSpeed = 1,
   rainbow = false,
+  isProRain = false,
   drawProgress = 1,
   cycles = 10,
 }) => {
@@ -64,7 +67,11 @@ export const LissajousModMath: React.FC<LissajousModMathProps> = ({
       linePoints.push(points[i]);
       linePoints.push(points[targetIndex]);
       
-      if (rainbow) {
+      if (isProRain) {
+        const [r1, g1, b1] = getProRainColor(i / numPoints);
+        const [r2, g2, b2] = getProRainColor(targetIndex / numPoints);
+        cols.push(r1, g1, b1, r2, g2, b2);
+      } else if (rainbow) {
         colorObj.setHSL((i / numPoints + multiplier * 0.01) % 1, 0.8, 0.5);
         cols.push(colorObj.r, colorObj.g, colorObj.b);
         colorObj.setHSL((targetIndex / numPoints + multiplier * 0.01) % 1, 0.8, 0.5);
@@ -77,7 +84,7 @@ export const LissajousModMath: React.FC<LissajousModMathProps> = ({
     }
 
     return { lines: linePoints, colors: cols };
-  }, [freqX, freqY, freqZ, phaseX, phaseY, phaseZ, multiplier, numPoints, rainbow, drawProgress, cycles, color]);
+  }, [freqX, freqY, freqZ, phaseX, phaseY, phaseZ, multiplier, numPoints, rainbow, isProRain, drawProgress, cycles, color]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry().setFromPoints(lines);

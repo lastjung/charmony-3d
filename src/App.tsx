@@ -19,8 +19,16 @@ import { PlayerBox } from './components/PlayerBox';
 // Hooks & Constants
 import { useAudioReactivity } from './hooks/useAudioReactivity';
 import { LISSAJOUS_PRESETS, LORENZ_PRESETS } from './constants/presets';
+import {
+  createContinuousSynth,
+  releaseContinuousSynth,
+  updateContinuousSynth,
+  type ContinuousSynth,
+  INSTRUMENTS,
+  type Instrument,
+} from './utils/audioSynth';
 
-type AppMode = 'lissajous' | 'lorenz';
+type AppMode = 'lissajous' | 'lorenz' | 'beam';
 
 export default function App() {
   // Global App State
@@ -42,14 +50,21 @@ export default function App() {
   const [drawProgress, setDrawProgress] = useState(1);
   const [isPlotting, setIsPlotting] = useState(false);
   const [plotSpeed, setPlotSpeed] = useState(0.005);
-  const [soundMode, setSoundMode] = useState<'math' | 'mech' | 'ambient'>('math');
-  const [soundProfile, setSoundProfile] = useState<'piano' | 'bell' | 'percussion'>('piano');
+  const [instrument, setInstrument] = useState<Instrument>('piano');
   const [isMuted, setIsMuted] = useState(false);
 
   // Beam Specific State
   const [beamShape, setBeamShape] = useState<'semicircle' | 'V' | 'parabola' | 'U'>('parabola');
-  const [beamSpawnRate, setBeamSpawnRate] = useState(0.04);
-  const [beamBounceLimit, setBeamBounceLimit] = useState(5);
+  const [beamRevolution, setBeamRevolution] = useState(-148);
+  const [beamRotation, setBeamRotation] = useState(58);
+  const [beamSpread, setBeamSpread] = useState(330);
+  const [beamCount, setBeamCount] = useState(1000);
+  const [beamSpeed, setBeamSpeed] = useState(96.98612347264257);
+  const [beamWidth, setBeamWidth] = useState(2.1);
+  const [beamBounceLimit, setBeamBounceLimit] = useState(19);
+  const [beamAlpha, setBeamAlpha] = useState(1);
+  const [isParallelLight, setIsParallelLight] = useState(false);
+  const [beamResetToken, setBeamResetToken] = useState(0);
 
   // Lissajous Specific State
   const [freqX, setFreqX] = useState(2);
@@ -128,64 +143,35 @@ export default function App() {
 
   // Generative Sound Logic (Ref-based for proper cleanup)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
-  const activeOscRef = React.useRef<OscillatorNode | null>(null);
-  const activeGainRef = React.useRef<GainNode | null>(null);
-  const activePanRef = React.useRef<StereoPannerNode | null>(null);
-  const activeFilterRef = React.useRef<BiquadFilterNode | null>(null);
+  const continuousSynthRef = React.useRef<ContinuousSynth | null>(null);
 
   // Life Cycle: Start / Stop Oscillator & Nodes
   useEffect(() => {
     // 1. Cleanup previous sound always
-    if (activeOscRef.current) {
-      const osc = activeOscRef.current;
-      const gain = activeGainRef.current;
-      if (gain) gain.gain.setTargetAtTime(0, audioCtxRef.current!.currentTime, 0.05);
-      setTimeout(() => {
-        try { osc.stop(); osc.disconnect(); } catch(e) {}
-      }, 100);
-      activeOscRef.current = null;
-      activeGainRef.current = null;
+    if (continuousSynthRef.current && audioCtxRef.current) {
+      releaseContinuousSynth(continuousSynthRef.current, audioCtxRef.current);
+      continuousSynthRef.current = null;
     }
 
-    // 2. Start nodes if plotting and not muted
-    if (isPlotting && !isMuted) {
+    // 2. Start nodes if plotting and not muted for continuous modes
+    if (isPlotting && !isMuted && mode !== 'beam') {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioCtxRef.current;
       if (ctx.state === 'suspended') ctx.resume();
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const panner = ctx.createStereoPanner();
-      const filter = ctx.createBiquadFilter();
-
-      osc.type = soundMode === 'math' ? 'triangle' : soundMode === 'mech' ? 'square' : 'sine';
-      filter.type = 'lowpass';
-      filter.Q.value = 5;
-      
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.1);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(panner);
-      panner.connect(ctx.destination);
-      
-      osc.start();
-
-      activeOscRef.current = osc;
-      activeGainRef.current = gain;
-      activePanRef.current = panner;
-      activeFilterRef.current = filter;
+      continuousSynthRef.current = createContinuousSynth(ctx, instrument);
+      continuousSynthRef.current.master.gain.setValueAtTime(0, ctx.currentTime);
+      continuousSynthRef.current.master.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 0.12);
     }
 
     return () => {};
-  }, [isPlotting, isMuted, soundMode, soundProfile, mode]);
+  }, [isPlotting, isMuted, instrument, mode]);
 
   // Update Parameters: Frequency, Panning, Filter (Dynamic 3D Mapping)
   useEffect(() => {
-    if (activeOscRef.current && audioCtxRef.current) {
+    if (continuousSynthRef.current && audioCtxRef.current && mode !== 'beam') {
       const ctx = audioCtxRef.current;
       
       // Calculate 3D Position of Head from progress
@@ -202,33 +188,18 @@ export default function App() {
         z = Math.sin(drawProgress * 30);
       }
 
-      // 1. Pitch Mapping (Y-axis) - Wider 400Hz - 1200Hz range
-      const baseFreq = soundMode === 'math' ? 220 : soundMode === 'mech' ? 110 : 80;
-      const freq = baseFreq + ((y + 1) * 400) + (freqY * 10);
-      activeOscRef.current.frequency.setTargetAtTime(freq, ctx.currentTime, 0.05);
+      const baseFreq = mode === 'lissajous' ? 180 : 130;
+      const freq = baseFreq + ((y + 1) * 320) + (mode === 'lissajous' ? freqY * 10 : rho * 0.8);
 
-      // 2. Panning Mapping (X-axis) - Stereo L/R
-      if (activePanRef.current) {
-        activePanRef.current.pan.setTargetAtTime(x * 0.8, ctx.currentTime, 0.05);
-      }
-
-      // 3. Filter Mapping (Z-axis) - Brightness modulation
-      if (activeFilterRef.current) {
-        const cutoff = 400 + ((z + 1) * 2000);
-        activeFilterRef.current.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.05);
-      }
-
-      // 4. Gain Modulation (Mech Pulsing)
-      if (activeGainRef.current) {
-        if (soundMode === 'mech') {
-          const pulse = Math.floor(drawProgress * 150) % 2 === 0 ? 0.05 : 0.01;
-          activeGainRef.current.gain.setTargetAtTime(pulse, ctx.currentTime, 0.01);
-        } else {
-          activeGainRef.current.gain.setTargetAtTime(0.05, ctx.currentTime, 0.1);
-        }
-      }
+      updateContinuousSynth(continuousSynthRef.current, ctx, instrument, {
+        freq,
+        pan: x * 0.8,
+        brightness: (z + 1) / 2,
+        energy: mode === 'lissajous' ? 0.35 + drawProgress * 0.25 : 0.3 + Math.abs(x) * 0.3,
+        motion: mode === 'lissajous' ? Math.sin(drawProgress * Math.PI * 6) : Math.cos(drawProgress * Math.PI * 8),
+      });
     }
-  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, soundMode, soundProfile, mode]);
+  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, instrument, mode, rho]);
 
   // Animation loop for automatic parameters
   useEffect(() => {
@@ -335,7 +306,20 @@ export default function App() {
       setPhaseX(0); setPhaseY(Math.PI / 2); setPhaseZ(Math.PI / 4);
       setMultiplier(2); setCycles(10); setShowModMath(false);
     } else {
-      setSigma(10); setRho(28); setBeta(2.667); setLorenzSpeed(0.01);
+      if (mode === 'beam') {
+        setBeamRevolution(-148);
+        setBeamRotation(58);
+        setBeamSpread(330);
+        setBeamCount(1000);
+        setBeamSpeed(96.98612347264257);
+        setBeamWidth(2.1);
+        setBeamBounceLimit(19);
+        setBeamAlpha(1);
+        setIsParallelLight(false);
+        setBeamResetToken(prev => prev + 1);
+      } else {
+        setSigma(10); setRho(28); setBeta(2.667); setLorenzSpeed(0.01);
+      }
     }
     setColor('#3b82f6'); setIsRainbow(false); setDrawProgress(1);
     setIsPlotting(false); setIsAutoMultiplier(false); setIsOrbit(false);
@@ -345,6 +329,9 @@ export default function App() {
   const partialReset = () => {
     setDrawProgress(0);
     setIsPlotting(true);
+    if (mode === 'beam') {
+      setBeamResetToken(prev => prev + 1);
+    }
   };
 
   const nextPreset = () => {
@@ -363,6 +350,7 @@ export default function App() {
         <color attach="background" args={['#09090b']} />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
+        <axesHelper args={[8]} />
         
         <Suspense fallback={null}>
           <group position={[0, -5, 0]}>
@@ -403,12 +391,21 @@ export default function App() {
                 showHead={showHead}
               />
             ) : (
-              <group position={[0, -5, 0]}>
+              <group position={[0, -2.5, 0]}>
                 <BeamCollider3D 
                   isPlaying={isPlotting} isMuted={isMuted} 
-                  activeShape={beamShape} spawnRate={beamSpawnRate} 
-                  bounceLimit={beamBounceLimit} soundType={soundProfile}
-                  soundMode={soundMode}
+                  activeShape={beamShape}
+                  bounceLimit={beamBounceLimit}
+                  instrument={instrument}
+                  isParallelLight={isParallelLight}
+                  beamSpeed={beamSpeed}
+                  rayNumber={beamCount}
+                  revolution={beamRevolution}
+                  rotation={beamRotation}
+                  spread={beamSpread}
+                  rayWidth={beamWidth}
+                  alpha={beamAlpha}
+                  resetToken={beamResetToken}
                 />
               </group>
             )}
@@ -518,7 +515,7 @@ export default function App() {
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-2">
                          <Music size={12} className="text-zinc-500" />
-                         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sound Mode</span>
+                         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Instrument</span>
                        </div>
                        <button onClick={() => setIsMuted(!isMuted)} className={isMuted ? 'text-zinc-600' : 'text-blue-400 font-bold'}>
                          {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -526,18 +523,12 @@ export default function App() {
                     </div>
                     <div className="space-y-2.5">
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Waveform Mode</span>
+                        <span className="text-[8px] text-zinc-500 font-mono uppercase pl-1">
+                          {mode === 'beam' ? 'Impact Voice' : 'Shared Voice'}
+                        </span>
                         <div className="grid grid-cols-3 gap-1.5">
-                          {['math', 'mech', 'ambient'].map((m) => (
-                            <button key={m} onClick={() => setSoundMode(m as any)} className={`py-1.5 rounded-lg text-[8px] font-black uppercase border transition-all ${soundMode === m && !isMuted ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-zinc-900 border-zinc-950 text-zinc-600'}`}>{m}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Instrument Profile</span>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {['piano', 'bell', 'percussion'].map((p) => (
-                            <button key={p} onClick={() => setSoundProfile(p as any)} className={`py-1.5 rounded-lg text-[8px] font-black uppercase border transition-all ${soundProfile === p && !isMuted ? 'bg-amber-600/20 border-amber-500/50 text-amber-400' : 'bg-zinc-900 border-zinc-950 text-zinc-600'}`}>{p}</button>
+                          {INSTRUMENTS.map((item) => (
+                            <button key={item} onClick={() => setInstrument(item)} className={`py-1.5 rounded-lg text-[8px] font-black uppercase border transition-all ${instrument === item && !isMuted ? 'bg-amber-600/20 border-amber-500/50 text-amber-400' : 'bg-zinc-900 border-zinc-950 text-zinc-600'}`}>{item}</button>
                           ))}
                         </div>
                       </div>
@@ -870,9 +861,32 @@ export default function App() {
                         </div>
                       </div>
                       <div className="space-y-4">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Dynamics</span>
-                        <ControlSlider label="Spawn Rate" value={beamSpawnRate} min={0.01} max={0.2} step={0.01} onChange={setBeamSpawnRate} color="text-amber-400" />
-                        <ControlSlider label="Reflect Limit" value={beamBounceLimit} min={1} max={15} step={1} onChange={setBeamBounceLimit} color="text-orange-400" />
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Beam Settings</span>
+                        <button
+                          onClick={() => setIsParallelLight(!isParallelLight)}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all ${isParallelLight ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+                        >
+                          <span className="text-[9px] font-bold uppercase">Parallel Light</span>
+                          <div className={`w-1.5 h-1.5 rounded-full ${isParallelLight ? 'bg-sky-300' : 'bg-zinc-700'}`} />
+                        </button>
+                        <ControlSlider label="1. Revolution" value={beamRevolution} min={-180} max={180} step={1} onChange={setBeamRevolution} color="text-blue-400" />
+                        <ControlSlider label="2. Rotation" value={beamRotation} min={-180} max={180} step={1} onChange={setBeamRotation} color="text-cyan-400" />
+                        <ControlSlider label="3. Beam Spread" value={beamSpread} min={0} max={360} step={1} onChange={setBeamSpread} color="text-emerald-400" />
+                        <ControlSlider label="4. Ray Number" value={beamCount} min={20} max={1000} step={1} onChange={setBeamCount} color="text-violet-400" />
+                        <ControlSlider label="5. Ray Speed" value={beamSpeed} min={0} max={100} step={0.001} onChange={setBeamSpeed} color="text-sky-400" />
+                        <ControlSlider label="6. Ray Width" value={beamWidth} min={0.5} max={8} step={0.1} onChange={setBeamWidth} color="text-fuchsia-400" />
+                        <ControlSlider label="7. Reflections" value={beamBounceLimit} min={1} max={20} step={1} onChange={setBeamBounceLimit} color="text-orange-400" />
+                        <ControlSlider label="8. Alpha" value={beamAlpha} min={0.2} max={3} step={0.05} onChange={setBeamAlpha} color="text-amber-400" />
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button onClick={partialReset} className="flex items-center justify-center gap-2 p-2.5 rounded-xl border bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-white/20 transition-all">
+                            <RotateCcw size={12} />
+                            <span className="text-[9px] font-bold uppercase">Partial Reset</span>
+                          </button>
+                          <button onClick={reset} className="flex items-center justify-center gap-2 p-2.5 rounded-xl border bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-white/20 transition-all">
+                            <RotateCcw size={12} />
+                            <span className="text-[9px] font-bold uppercase">Reset</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -887,7 +901,11 @@ export default function App() {
           {isUIVisible && !isFullscreen && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="flex justify-between items-end mt-auto pointer-events-none">
               <div className="text-[10px] text-zinc-600 font-mono uppercase tracking-[0.2em] max-w-[200px]">
-                {mode === 'lissajous' ? 'Harmonic Motion Explorer' : 'Chaotic System Visualization'}
+                {mode === 'lissajous'
+                  ? 'Harmonic Motion Explorer'
+                  : mode === 'lorenz'
+                    ? 'Chaotic System Visualization'
+                    : 'Geometric Music Collider'}
               </div>
               <div className="flex items-center gap-4 pointer-events-auto">
                 <a href="#" className="text-zinc-500 hover:text-white transition-colors"><Github size={14} /></a>

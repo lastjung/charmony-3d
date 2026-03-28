@@ -1,46 +1,112 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { playImpactVoice, type Instrument } from '../utils/audioSynth';
 
-// ── Audio Constants ──────────────────────────────────────────────────────────
-const SCALE = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25]; // Pentatonic C4
+const SCALE = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25];
+const TRAIL_TTL_MS = 900;
+const EPS = 1e-6;
 
-// ── Types ────────────────────────────────────────────────────────────────────
+interface BeamCollision {
+  x: number;
+  pan: number;
+  distance: number;
+  triggered: boolean;
+}
+
 interface BeamState {
   id: number;
   points: THREE.Vector3[];
+  collisions: BeamCollision[];
   born: number;
   hue: number;
-  playedSound: boolean;
-}
-
-interface ShapeType {
-  type: 'semicircle' | 'V' | 'parabola' | 'U';
-  geometry: THREE.BufferGeometry;
-  hue: number;
+  progress: number;
+  totalLength: number;
+  completedAt: number | null;
 }
 
 interface BeamCollider3DProps {
   isPlaying: boolean;
   isMuted: boolean;
   activeShape: 'semicircle' | 'V' | 'parabola' | 'U';
-  spawnRate: number;
   bounceLimit: number;
-  soundType: 'piano' | 'bell' | 'percussion';
-  soundMode: 'math' | 'mech' | 'ambient';
+  instrument: Instrument;
+  isParallelLight: boolean;
+  beamSpeed: number;
+  rayNumber: number;
+  revolution: number;
+  rotation: number;
+  spread: number;
+  rayWidth: number;
+  alpha: number;
+  resetToken: number;
 }
 
-export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({ 
-  isPlaying, isMuted, activeShape, spawnRate, bounceLimit, soundType, soundMode 
+const normalizePan = (xPos: number) => Math.max(-1, Math.min(1, xPos / 4));
+
+const noteFromX = (xPos: number) => {
+  const normalizedX = (xPos + 4) / 8;
+  const idx = Math.floor(normalizedX * SCALE.length);
+  return SCALE[Math.max(0, Math.min(SCALE.length - 1, idx))];
+};
+
+const buildVisiblePath = (beam: BeamState) => {
+  if (beam.points.length === 0) return [];
+  if (beam.progress <= 0) return [beam.points[0].clone()];
+
+  const visible: THREE.Vector3[] = [beam.points[0].clone()];
+  let remaining = Math.min(beam.progress, beam.totalLength);
+
+  for (let i = 1; i < beam.points.length; i++) {
+    const start = beam.points[i - 1];
+    const end = beam.points[i];
+    const segmentLength = start.distanceTo(end);
+
+    if (remaining >= segmentLength) {
+      visible.push(end.clone());
+      remaining -= segmentLength;
+      continue;
+    }
+
+    if (segmentLength > EPS) {
+      const point = start.clone().lerp(end, remaining / segmentLength);
+      visible.push(point);
+    }
+    break;
+  }
+
+  return visible;
+};
+
+const getHeadPosition = (beam: BeamState) => {
+  const visible = buildVisiblePath(beam);
+  return visible[visible.length - 1] ?? beam.points[0];
+};
+
+export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
+  isPlaying,
+  isMuted,
+  activeShape,
+  bounceLimit,
+  instrument,
+  isParallelLight,
+  beamSpeed,
+  rayNumber,
+  revolution,
+  rotation,
+  spread,
+  rayWidth,
+  alpha,
+  resetToken,
 }) => {
   const [beams, setBeams] = useState<BeamState[]>([]);
   const beamIdRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const spawnAccumulatorRef = useRef(0);
 
-  // 1. Build Geometry for the Active Shape (Centered at local [0,0,0])
   const shape = useMemo(() => {
     const pts: THREE.Vector3[] = [];
-    const halfWidth = 4.0; // Scaled down for cleanliness
+    const halfWidth = 4.0;
     const depth = 3.5;
     let hue = 200;
 
@@ -62,8 +128,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
         hue = 280;
         for (let i = 0; i <= 32; i++) {
           const x = (i / 32 - 0.5) * halfWidth * 2;
-          const y = (x * x * depth) / (halfWidth * halfWidth);
-          pts.push(new THREE.Vector3(x, y, 0));
+          pts.push(new THREE.Vector3(x, x * x * 1.5, 0));
         }
         break;
       case 'U':
@@ -75,185 +140,356 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
         break;
     }
 
-    return { 
-      type: activeShape, 
-      geometry: new THREE.BufferGeometry().setFromPoints(pts), 
+    return {
+      geometry: new THREE.BufferGeometry().setFromPoints(pts),
       hue,
       halfWidth,
-      depth
+      depth,
     };
   }, [activeShape]);
 
-  // 2. Sound Engine (Combined Mode + Profile)
-  const playImpactSound = (xPos: number) => {
+  const emitterState = useMemo(() => {
+    const origin = new THREE.Vector3(0, 6, 0);
+    const rotationRad = THREE.MathUtils.degToRad(rotation);
+    const spreadRad = THREE.MathUtils.degToRad(spread);
+    const baseDirection = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), origin).normalize();
+    baseDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), rotationRad);
+    const perpendicular = new THREE.Vector3(-baseDirection.y, baseDirection.x, 0).normalize();
+
+    return {
+      origin,
+      baseDirection,
+      perpendicular,
+      spreadRad,
+    };
+  }, [rotation, spread]);
+
+  const playImpactSound = (xPos: number, pan: number) => {
     if (isMuted || !isPlaying) return;
     if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
-
-    const normalizedX = (xPos + 4) / 8; // x range approx -4 to 4
-    const idx = Math.floor(normalizedX * SCALE.length);
-    const freq = SCALE[Math.max(0, Math.min(SCALE.length - 1, idx))];
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-
-    // Waveform from soundMode
-    osc.type = soundMode === 'math' ? 'triangle' : soundMode === 'mech' ? 'square' : 'sine';
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    
-    // Impact Profile from soundType
-    const decay = soundType === 'piano' ? 1.2 : soundType === 'bell' ? 2.5 : 0.4;
-    const volume = soundType === 'percussion' ? 0.12 : 0.08;
-    
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2000, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + decay);
-
-    gain.gain.setValueAtTime(volume, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + decay);
-    
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + decay + 0.1);
+    playImpactVoice(ctx, instrument, noteFromX(xPos), 1, pan);
   };
 
-  // 3. Beam Physics (Raycast)
   const spawnBeam = () => {
     if (!isPlaying) return;
 
-    // Start from high above, less spread
-    const startX = (Math.random() - 0.5) * 6; 
-    const path: THREE.Vector3[] = [new THREE.Vector3(startX, 15, 0)];
-    let currentPos = path[0].clone();
-    let currentDir = new THREE.Vector3((Math.random() - 0.5) * 0.1, -1, 0).normalize();
-    let lastHitX: number | null = null;
+    const origin = emitterState.origin.clone();
+    const points: THREE.Vector3[] = [
+      isParallelLight
+        ? origin.clone().add(emitterState.perpendicular.clone().multiplyScalar((Math.random() - 0.5) * 6))
+        : origin.clone(),
+    ];
+    const collisions: BeamCollision[] = [];
+    let currentPos = points[0].clone();
+    let currentDir = emitterState.baseDirection.clone();
+    if (isParallelLight) {
+      currentDir = emitterState.baseDirection.clone();
+    } else {
+      currentDir.applyAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        (Math.random() - 0.5) * emitterState.spreadRad
+      ).normalize();
+    }
+    let totalLength = 0;
 
-    for (let b = 0; b < bounceLimit; b++) {
-      let minT = 1000;
-      let hitOccurred = false;
+    const W = shape.halfWidth;
+    const D = shape.depth;
 
-      // Single shape focused collision
-      if (Math.abs(currentPos.x) < shape.halfWidth + 1) {
-          const relativeY = currentPos.y; 
-          if (currentDir.y < 0 && relativeY > 0) {
-              const t = relativeY / -currentDir.y;
-              const hitX = currentPos.x + currentDir.x * t;
-              
-              if (t < minT && t > 0.01 && Math.abs(hitX) < shape.halfWidth) {
-                  minT = t;
-                  const pt = currentPos.clone().add(currentDir.clone().multiplyScalar(t));
-                  path.push(pt);
-                  lastHitX = pt.x;
-                  
-                  // Reflect upward logic (approximation for the "bowl" shapes)
-                  const normal = new THREE.Vector3(0, 1, 0); 
-                  if (activeShape === 'semicircle') {
-                    normal.set(pt.x / shape.halfWidth, 1, 0).normalize();
-                  }
-                  
-                  currentDir.reflect(normal).multiplyScalar(1.02);
-                  currentPos = pt.clone();
-                  hitOccurred = true;
-                }
+    for (let bounce = 0; bounce < bounceLimit; bounce++) {
+      let hitT = Infinity;
+      const hitNormal = new THREE.Vector3();
+      const hitPoint = new THREE.Vector3();
+
+      if (activeShape === 'semicircle') {
+        const radius = W;
+        const center = new THREE.Vector3(0, radius, 0);
+        const oc = currentPos.clone().sub(center);
+        const a = currentDir.dot(currentDir);
+        const bCoeff = 2 * oc.dot(currentDir);
+        const cCoeff = oc.dot(oc) - radius * radius;
+        const disc = bCoeff * bCoeff - 4 * a * cCoeff;
+
+        if (disc >= 0) {
+          const sqrtDisc = Math.sqrt(disc);
+          const roots = [(-bCoeff - sqrtDisc) / (2 * a), (-bCoeff + sqrtDisc) / (2 * a)];
+          roots.forEach((t) => {
+            if (t > 0.01 && t < hitT) {
+              const point = currentPos.clone().add(currentDir.clone().multiplyScalar(t));
+              if (point.y <= radius + 0.1) {
+                hitT = t;
+                hitPoint.copy(point);
+                hitNormal.copy(point.clone().sub(center).normalize().negate());
+              }
             }
+          });
+        }
+      } else if (activeShape === 'V') {
+        const slope = D / W;
+        const normals = [
+          new THREE.Vector3(slope, 1, 0).normalize(),
+          new THREE.Vector3(-slope, 1, 0).normalize(),
+        ];
+
+        normals.forEach((normal) => {
+          const denom = currentDir.dot(normal);
+          if (Math.abs(denom) > 0.0001) {
+            const t = -currentPos.dot(normal) / denom;
+            if (t > 0.01 && t < hitT) {
+              const point = currentPos.clone().add(currentDir.clone().multiplyScalar(t));
+              if (Math.abs(point.x) <= W + 0.1 && point.y <= D + 0.1 && point.y >= -0.1) {
+                hitT = t;
+                hitPoint.copy(point);
+                hitNormal.copy(normal);
+              }
+            }
+          }
+        });
+      } else if (activeShape === 'parabola') {
+        const k = 1.5;
+        const A = k * currentDir.x * currentDir.x;
+        const B = 2 * k * currentPos.x * currentDir.x - currentDir.y;
+        const C = k * currentPos.x * currentPos.x - currentPos.y;
+
+        const roots: number[] = [];
+        if (Math.abs(A) < EPS) {
+          if (Math.abs(B) > EPS) roots.push(-C / B);
+        } else {
+          const disc = B * B - 4 * A * C;
+          if (disc >= 0) {
+            const sqrtDisc = Math.sqrt(disc);
+            roots.push((-B - sqrtDisc) / (2 * A), (-B + sqrtDisc) / (2 * A));
+          }
         }
 
-        if (!hitOccurred) {
-            path.push(currentPos.clone().add(currentDir.multiplyScalar(20)));
-            break;
-        }
+        roots.forEach((t) => {
+          if (t > 0.01 && t < hitT) {
+            const point = currentPos.clone().add(currentDir.clone().multiplyScalar(t));
+            if (Math.abs(point.x) <= W + 0.2) {
+              hitT = t;
+              hitPoint.copy(point);
+              hitNormal.set(-2 * k * point.x, 1, 0).normalize();
+            }
+          }
+        });
+      } else if (activeShape === 'U') {
+        const normals = [
+          new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(1, 0, 0),
+          new THREE.Vector3(-1, 0, 0),
+        ];
+        const offsets = [0, W, W];
+
+        normals.forEach((normal, index) => {
+          const denom = currentDir.dot(normal);
+          if (Math.abs(denom) > 0.0001) {
+            const t = (offsets[index] - currentPos.dot(normal)) / denom;
+            if (t > 0.01 && t < hitT) {
+              const point = currentPos.clone().add(currentDir.clone().multiplyScalar(t));
+              const inBounds = index === 0 ? Math.abs(point.x) <= W : point.y >= 0 && point.y <= D;
+              if (inBounds) {
+                hitT = t;
+                hitPoint.copy(point);
+                hitNormal.copy(normal);
+              }
+            }
+          }
+        });
+      }
+
+      if (hitT === Infinity) {
+        const exitPoint = currentPos.clone().add(currentDir.clone().multiplyScalar(20));
+        totalLength += currentPos.distanceTo(exitPoint);
+        points.push(exitPoint);
+        break;
+      }
+
+      totalLength += currentPos.distanceTo(hitPoint);
+      points.push(hitPoint.clone());
+      collisions.push({
+        x: hitPoint.x,
+        pan: normalizePan(hitPoint.x),
+        distance: totalLength,
+        triggered: false,
+      });
+      currentDir.reflect(hitNormal).normalize();
+      currentPos.copy(hitPoint).add(currentDir.clone().multiplyScalar(0.02));
     }
 
-    setBeams(prev => [...prev.slice(-20), {
-      id: beamIdRef.current++,
-      points: path,
-      born: Date.now(),
-      hue: shape.hue,
-      playedSound: false,
-      lastHitX: lastHitX
-    } as any]);
+    setBeams((prev) => [
+      ...prev.slice(-(Math.max(1, rayNumber) - 1)),
+      {
+        id: beamIdRef.current++,
+        points,
+        collisions,
+        born: Date.now(),
+        hue: shape.hue,
+        progress: 0,
+        totalLength,
+        completedAt: null,
+      },
+    ]);
   };
 
-  // 4. Animation Frame
-  useFrame(() => {
-    if (!isPlaying) return;
-
-    // Pulse spawn logic based on spawnRate prop
-    if (Math.random() < spawnRate) {
+  useFrame((_, delta) => {
+    if (isPlaying) {
+      const spawnPerSecond = Math.min(60, Math.max(4, rayNumber / 20));
+      spawnAccumulatorRef.current += delta * spawnPerSecond;
+      while (spawnAccumulatorRef.current >= 1) {
+        if (beams.length >= rayNumber) {
+          spawnAccumulatorRef.current = 0;
+          break;
+        }
         spawnBeam();
+        spawnAccumulatorRef.current -= 1;
+      }
     }
 
-    // Sound logic
     const now = Date.now();
-    beams.forEach(b => {
-        if (!b.playedSound && (b as any).lastHitX !== null && (now - b.born) > 200) {
-            playImpactSound((b as any).lastHitX);
-            b.playedSound = true;
-        }
-    });
+    const pendingImpacts: Array<{ x: number; pan: number }> = [];
+
+    setBeams((prev) =>
+      prev
+        .map((beam) => {
+          const nextProgress = isPlaying
+            ? Math.min(beam.totalLength, beam.progress + beamSpeed * delta)
+            : beam.progress;
+
+          const collisions = beam.collisions.map((collision) => {
+            if (!collision.triggered && nextProgress >= collision.distance) {
+              pendingImpacts.push({ x: collision.x, pan: collision.pan });
+              return { ...collision, triggered: true };
+            }
+            return collision;
+          });
+
+          const completedAt =
+            beam.completedAt ?? (nextProgress >= beam.totalLength ? now : null);
+
+          return {
+            ...beam,
+            progress: nextProgress,
+            collisions,
+            completedAt,
+          };
+        })
+        .filter((beam) => beam.completedAt === null || now - beam.completedAt < TRAIL_TTL_MS)
+    );
+
+    pendingImpacts.forEach(({ x, pan }) => playImpactSound(x, pan));
   });
 
-  // Cleanup old beams
   useEffect(() => {
-    const interval = setInterval(() => {
-      setBeams(prev => prev.filter(b => Date.now() - b.born < 3000));
-    }, 1000);
-    return () => clearInterval(interval);
+    setBeams([]);
+    spawnAccumulatorRef.current = 0;
+  }, [resetToken, activeShape, isParallelLight, revolution, rotation, spread]);
+
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+      }
+    };
   }, []);
 
   return (
     <group>
-      {/* Active Shape Only */}
-      <group>
-        <line geometry={shape.geometry}>
-           <lineBasicMaterial color={`hsl(${shape.hue}, 80%, 40%)`} transparent opacity={0.3} />
-        </line>
-        <line geometry={shape.geometry}>
-           <lineBasicMaterial color={`hsl(${shape.hue}, 100%, 70%)`} transparent opacity={1.0} />
-        </line>
-        <pointLight position={[0, 1, 0]} color={`hsl(${shape.hue}, 100%, 70%)`} intensity={1.5} distance={10} />
+      <group position={emitterState.origin.toArray()}>
+        <mesh>
+          <sphereGeometry args={[0.12, 20, 20]} />
+          <meshStandardMaterial
+            color="white"
+            emissive={new THREE.Color(`hsl(${shape.hue}, 100%, 70%)`)}
+            emissiveIntensity={4}
+          />
+        </mesh>
+        <pointLight color={new THREE.Color(`hsl(${shape.hue}, 100%, 80%)`)} intensity={3} distance={12} />
       </group>
 
-      {/* Dynamic Beams */}
-      {beams.map(b => (
-        <BeamLine key={b.id} beam={b} />
+      <group>
+        <primitive
+          object={
+            new THREE.Line(
+              shape.geometry,
+              new THREE.LineBasicMaterial({
+                color: new THREE.Color(`hsl(${shape.hue}, 80%, 40%)`),
+                transparent: true,
+                opacity: 0.3,
+              })
+            )
+          }
+        />
+        <primitive
+          object={
+            new THREE.Line(
+              shape.geometry,
+              new THREE.LineBasicMaterial({
+                color: new THREE.Color(`hsl(${shape.hue}, 100%, 70%)`),
+                transparent: true,
+                opacity: 1,
+              })
+            )
+          }
+        />
+        <pointLight
+          position={[0, 1, 0]}
+          color={new THREE.Color(`hsl(${shape.hue}, 100%, 60%)`)}
+          intensity={1.5}
+          distance={8}
+        />
+      </group>
+
+      {beams.map((beam) => (
+        <BeamLine key={beam.id} beam={beam} rayWidth={rayWidth} alpha={alpha} />
       ))}
     </group>
   );
 };
 
-// ── Sub-component for individual Beam Line ───────────────────────────────────
-const BeamLine: React.FC<{ beam: BeamState }> = ({ beam }) => {
-    const [opacity, setOpacity] = useState(0);
+const BeamLine: React.FC<{ beam: BeamState; rayWidth: number; alpha: number }> = ({ beam, rayWidth, alpha }) => {
+  const age = Date.now() - beam.born;
+  const trailAge = beam.completedAt ? Date.now() - beam.completedAt : 0;
+  const fadeIn = Math.min(1, age / 120);
+  const fadeOut = beam.completedAt ? Math.max(0, 1 - trailAge / TRAIL_TTL_MS) : 1;
+  const opacity = Math.min(1, (alpha / 3) * 1.2) * fadeIn * fadeOut;
+  const visiblePoints = useMemo(() => buildVisiblePath(beam), [beam]);
+  const headPosition = useMemo(() => getHeadPosition(beam), [beam]);
 
-    useFrame(() => {
-        const age = Date.now() - beam.born;
-        if (age < 300) setOpacity(age / 300);
-        else if (age > 2400) setOpacity(Math.max(0, 1 - (age - 2400) / 600));
-        else setOpacity(1);
+  const line = useMemo(() => {
+    const geometry = new THREE.BufferGeometry().setFromPoints(visiblePoints);
+    const material = new THREE.LineBasicMaterial({
+      color: new THREE.Color(`hsl(${beam.hue}, 100%, 90%)`),
+      transparent: true,
+      opacity,
+      linewidth: rayWidth,
     });
+    return new THREE.Line(geometry, material);
+  }, [beam.hue, opacity, rayWidth, visiblePoints]);
 
-    const geometry = useMemo(() => {
-        return new THREE.BufferGeometry().setFromPoints(beam.points);
-    }, [beam.points]);
-
-    return (
-        <line geometry={geometry}>
-            <lineBasicMaterial 
-                color={`hsl(${beam.hue}, 100%, 85%)`} 
-                transparent 
-                opacity={opacity * 0.7} 
-                linewidth={1.5}
-            />
-        </line>
-    );
+  return (
+    <group>
+      <primitive object={line} />
+      <mesh position={headPosition.toArray()}>
+        <sphereGeometry args={[0.05 + rayWidth * 0.03, 16, 16]} />
+        <meshStandardMaterial
+          color={new THREE.Color(`hsl(${beam.hue}, 100%, 96%)`)}
+          emissive={new THREE.Color(`hsl(${beam.hue}, 100%, 75%)`)}
+          emissiveIntensity={4 + rayWidth * 0.4}
+          transparent
+          opacity={opacity}
+        />
+      </mesh>
+      <pointLight
+        position={headPosition.toArray()}
+        color={new THREE.Color(`hsl(${beam.hue}, 100%, 80%)`)}
+        intensity={1.2 * opacity}
+        distance={3}
+      />
+    </group>
+  );
 };
 
 export default BeamCollider3D;

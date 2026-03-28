@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { startTransition, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 
 interface ControlSliderProps {
@@ -26,7 +26,12 @@ export function ControlSlider({
   isAuto = false,
   onAutoToggle
 }: ControlSliderProps) {
-  
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
   // Apple Pro Style Red for active state
   const activeColor = "#ff4d4d";
   
@@ -62,7 +67,7 @@ export function ControlSlider({
             className={`text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${!isAuto ? color : "text-[#ff4d4d]"}`}
             style={!isAuto && !color.startsWith('text-') ? { color } : {}}
           >
-            {label}
+          {label}
           </motion.label>
         </div>
         
@@ -70,7 +75,7 @@ export function ControlSlider({
           className={`text-xs font-mono transition-colors ${!isAuto ? color : "text-[#ff4d4d]"}`}
           style={!isAuto && !color.startsWith('text-') ? { color } : {}}
         >
-          {format ? format(value) : (step < 0.1 ? value.toFixed(3) : value.toFixed(1))}
+          {format ? format(localValue) : (step < 0.1 ? localValue.toFixed(3) : localValue.toFixed(1))}
         </span>
       </div>
       
@@ -79,8 +84,14 @@ export function ControlSlider({
         min={min} 
         max={max} 
         step={step} 
-        value={value} 
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        value={localValue} 
+        onChange={(e) => {
+          const nextValue = parseFloat(e.target.value);
+          setLocalValue(nextValue);
+          startTransition(() => {
+            onChange(nextValue);
+          });
+        }}
         className={`w-full h-1 rounded-lg appearance-none cursor-pointer transition-all ${isAuto ? 'bg-[#ff4d4d]/30' : 'bg-zinc-800'}`}
         style={{
           accentColor: isAuto ? activeColor : undefined,

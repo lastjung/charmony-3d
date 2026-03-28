@@ -342,7 +342,7 @@ export const updateContinuousSynth = (
     now,
     0.08
   );
-  synth.master.gain.setTargetAtTime(voicing.baseGain + energy * 0.03, now, 0.08);
+  synth.master.gain.setTargetAtTime(voicing.baseGain * 5 + energy * 0.18, now, 0.08);
   synth.panner.pan.setTargetAtTime(pan, now, 0.06);
 };
 

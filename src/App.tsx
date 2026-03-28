@@ -50,6 +50,7 @@ export default function App() {
   const [audioSensitivity, setAudioSensitivity] = useState(1.5);
   const [drawProgress, setDrawProgress] = useState(1);
   const [isPlotting, setIsPlotting] = useState(false);
+  const [isBeamPlaying, setIsBeamPlaying] = useState(false);
   const [plotSpeed, setPlotSpeed] = useState(0.005);
   const [instrument, setInstrument] = useState<Instrument>('piano');
   const [isMuted, setIsMuted] = useState(false);
@@ -145,6 +146,29 @@ export default function App() {
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const continuousSynthRef = React.useRef<ContinuousSynth | null>(null);
 
+  const getContinuousAudioParams = () => {
+    let x = 0, y = 0, z = 0;
+    if (mode === 'lissajous') {
+      const t = drawProgress * Math.PI * 2 * cycles;
+      x = Math.sin(t * freqX + phaseX);
+      y = Math.sin(t * freqY + phaseY);
+      z = Math.sin(t * freqZ + phaseZ);
+    } else {
+      x = Math.sin(drawProgress * 50) * Math.cos(drawProgress * 20);
+      y = Math.cos(drawProgress * 40);
+      z = Math.sin(drawProgress * 30);
+    }
+
+    const baseFreq = mode === 'lissajous' ? 180 : 130;
+    return {
+      freq: baseFreq + ((y + 1) * 320) + (mode === 'lissajous' ? freqY * 10 : rho * 0.8),
+      pan: x * 0.8,
+      brightness: (z + 1) / 2,
+      energy: mode === 'lissajous' ? 0.35 + drawProgress * 0.25 : 0.3 + Math.abs(x) * 0.3,
+      motion: mode === 'lissajous' ? Math.sin(drawProgress * Math.PI * 6) : Math.cos(drawProgress * Math.PI * 8),
+    };
+  };
+
   // Life Cycle: Start / Stop Oscillator & Nodes
   useEffect(() => {
     // 1. Cleanup previous sound always
@@ -163,7 +187,8 @@ export default function App() {
 
       continuousSynthRef.current = createContinuousSynth(ctx, instrument);
       continuousSynthRef.current.master.gain.setValueAtTime(0, ctx.currentTime);
-      continuousSynthRef.current.master.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 0.12);
+      continuousSynthRef.current.master.gain.linearRampToValueAtTime(0.26, ctx.currentTime + 0.12);
+      updateContinuousSynth(continuousSynthRef.current, ctx, instrument, getContinuousAudioParams());
     }
 
     return () => {};
@@ -171,35 +196,11 @@ export default function App() {
 
   // Update Parameters: Frequency, Panning, Filter (Dynamic 3D Mapping)
   useEffect(() => {
-    if (continuousSynthRef.current && audioCtxRef.current && mode !== 'beam') {
+    if (isPlotting && continuousSynthRef.current && audioCtxRef.current && mode !== 'beam') {
       const ctx = audioCtxRef.current;
-      
-      // Calculate 3D Position of Head from progress
-      let x = 0, y = 0, z = 0;
-      if (mode === 'lissajous') {
-        const t = drawProgress * Math.PI * 2 * cycles;
-        x = Math.sin(t * freqX + phaseX);
-        y = Math.sin(t * freqY + phaseY);
-        z = Math.sin(t * freqZ + phaseZ);
-      } else {
-        // Simplified Lorenz mapping (pseudo-approximation based on progress)
-        x = Math.sin(drawProgress * 50) * Math.cos(drawProgress * 20);
-        y = Math.cos(drawProgress * 40);
-        z = Math.sin(drawProgress * 30);
-      }
-
-      const baseFreq = mode === 'lissajous' ? 180 : 130;
-      const freq = baseFreq + ((y + 1) * 320) + (mode === 'lissajous' ? freqY * 10 : rho * 0.8);
-
-      updateContinuousSynth(continuousSynthRef.current, ctx, instrument, {
-        freq,
-        pan: x * 0.8,
-        brightness: (z + 1) / 2,
-        energy: mode === 'lissajous' ? 0.35 + drawProgress * 0.25 : 0.3 + Math.abs(x) * 0.3,
-        motion: mode === 'lissajous' ? Math.sin(drawProgress * Math.PI * 6) : Math.cos(drawProgress * Math.PI * 8),
-      });
+      updateContinuousSynth(continuousSynthRef.current, ctx, instrument, getContinuousAudioParams());
     }
-  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, instrument, mode, rho]);
+  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, instrument, isPlotting, mode, rho]);
 
   // Animation loop for automatic parameters
   useEffect(() => {
@@ -259,7 +260,7 @@ export default function App() {
   // Animation loop for plotting
   useEffect(() => {
     let interval: any;
-    if (isPlotting) {
+    if (isPlotting && mode !== 'beam') {
       interval = setInterval(() => {
         setDrawProgress((prev) => {
           if (prev >= 1) {
@@ -271,7 +272,7 @@ export default function App() {
       }, 16);
     }
     return () => clearInterval(interval);
-  }, [isPlotting, plotSpeed]);
+  }, [isPlotting, mode, plotSpeed]);
 
   // Auto Multiplier loop
   useEffect(() => {
@@ -326,20 +327,23 @@ export default function App() {
     } else {
       if (mode === 'beam') {
         resetBeamSettings();
+        setIsBeamPlaying(false);
       } else {
         setSigma(10); setRho(28); setBeta(2.667); setLorenzSpeed(0.01);
       }
     }
     setColor('#3b82f6'); setIsRainbow(false); setDrawProgress(1);
-    setIsPlotting(false); setIsAutoMultiplier(false); setIsOrbit(false);
+    setIsPlotting(false); setIsBeamPlaying(false); setIsAutoMultiplier(false); setIsOrbit(false);
     setIsAudioReactive(false);
   };
 
   const partialReset = () => {
-    setDrawProgress(0);
-    setIsPlotting(true);
     if (mode === 'beam') {
       restartBeamSimulation();
+      setIsBeamPlaying(true);
+    } else {
+      setDrawProgress(0);
+      setIsPlotting(true);
     }
   };
 
@@ -402,7 +406,7 @@ export default function App() {
             ) : (
               <group position={[0, -2.5, 0]}>
                 <BeamCollider3D 
-                  isPlaying={isPlotting} isMuted={isMuted} 
+                  isPlaying={isBeamPlaying} isMuted={isMuted} 
                   activeShape={beamSettings.shape}
                   bounceLimit={beamSettings.reflections}
                   instrument={instrument}
@@ -661,8 +665,8 @@ export default function App() {
         <AnimatePresence>
           {isUIVisible && !isFullscreen && (
             <PlayerBox 
-              isPlotting={isPlotting}
-              setIsPlotting={setIsPlotting}
+              isPlotting={mode === 'beam' ? isBeamPlaying : isPlotting}
+              setIsPlotting={mode === 'beam' ? setIsBeamPlaying : setIsPlotting}
               drawProgress={drawProgress}
               setDrawProgress={setDrawProgress}
               reset={reset}
@@ -878,15 +882,15 @@ export default function App() {
                           <span className="text-[9px] font-bold uppercase">Parallel Light</span>
                           <div className={`w-1.5 h-1.5 rounded-full ${beamSettings.isParallelLight ? 'bg-sky-300' : 'bg-zinc-700'}`} />
                         </button>
-                        <div className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Angles: 0 deg = +Y, -90 deg = -Y, 90 deg = -X</div>
+                        <div className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Angles: 0 deg = +X, 90 deg = +Y, 180 deg = -X, 270 deg = -Y</div>
                         <ControlSlider label="1. Revolution" value={beamSettings.revolution} min={-180} max={180} step={1} onChange={(value) => updateBeamSetting('revolution', value)} color="text-blue-400" isAuto={beamAutoModes.revolution} onAutoToggle={() => toggleBeamAutoMode('revolution')} />
-                        <ControlSlider label="2. Rotation" value={beamSettings.rotation} min={-180} max={180} step={1} onChange={(value) => updateBeamSetting('rotation', value)} color="text-cyan-400" isAuto={beamAutoModes.rotation} onAutoToggle={() => toggleBeamAutoMode('rotation')} />
-                        <ControlSlider label="3. Beam Spread" value={beamSettings.spread} min={0} max={360} step={1} onChange={(value) => updateBeamSetting('spread', value)} color="text-emerald-400" isAuto={beamAutoModes.spread} onAutoToggle={() => toggleBeamAutoMode('spread')} />
-                        <ControlSlider label="4. Ray Number" value={beamSettings.count} min={20} max={1000} step={1} onChange={(value) => updateBeamSetting('count', value)} color="text-violet-400" isAuto={beamAutoModes.count} onAutoToggle={() => toggleBeamAutoMode('count')} />
-                        <ControlSlider label="5. Ray Speed" value={beamSettings.speed} min={0} max={100} step={0.001} onChange={(value) => updateBeamSetting('speed', value)} color="text-sky-400" isAuto={beamAutoModes.speed} onAutoToggle={() => toggleBeamAutoMode('speed')} />
-                        <ControlSlider label="6. Ray Width" value={beamSettings.width} min={0.5} max={8} step={0.1} onChange={(value) => updateBeamSetting('width', value)} color="text-fuchsia-400" />
-                        <ControlSlider label="7. Reflections" value={beamSettings.reflections} min={1} max={20} step={1} onChange={(value) => updateBeamSetting('reflections', value)} color="text-orange-400" isAuto={beamAutoModes.reflections} onAutoToggle={() => toggleBeamAutoMode('reflections')} />
-                        <ControlSlider label="8. Alpha" value={beamSettings.alpha} min={0.2} max={3} step={0.05} onChange={(value) => updateBeamSetting('alpha', value)} color="text-amber-400" />
+                        <ControlSlider label="2. Rotation" value={beamSettings.rotation} min={0} max={360} step={1} onChange={(value) => updateBeamSetting('rotation', value)} color="text-cyan-400" isAuto={beamAutoModes.rotation} onAutoToggle={() => toggleBeamAutoMode('rotation')} />
+                        <ControlSlider label="3. Beam Spread" value={beamSettings.spread} min={0} max={90} step={1} onChange={(value) => updateBeamSetting('spread', value)} color="text-emerald-400" isAuto={beamAutoModes.spread} onAutoToggle={() => toggleBeamAutoMode('spread')} />
+                        <ControlSlider label="4. Ray Number" value={beamSettings.count} min={20} max={280} step={1} onChange={(value) => updateBeamSetting('count', value)} color="text-violet-400" isAuto={beamAutoModes.count} onAutoToggle={() => toggleBeamAutoMode('count')} />
+                        <ControlSlider label="5. Ray Speed" value={beamSettings.speed} min={0.2} max={4.5} step={0.01} onChange={(value) => updateBeamSetting('speed', value)} color="text-sky-400" isAuto={beamAutoModes.speed} onAutoToggle={() => toggleBeamAutoMode('speed')} />
+                        <ControlSlider label="6. Ray Width" value={beamSettings.width} min={0.2} max={1.2} step={0.01} onChange={(value) => updateBeamSetting('width', value)} color="text-fuchsia-400" />
+                        <ControlSlider label="7. Reflections" value={beamSettings.reflections} min={1} max={12} step={1} onChange={(value) => updateBeamSetting('reflections', value)} color="text-orange-400" isAuto={beamAutoModes.reflections} onAutoToggle={() => toggleBeamAutoMode('reflections')} />
+                        <ControlSlider label="8. Alpha" value={beamSettings.alpha} min={0.2} max={1.2} step={0.01} onChange={(value) => updateBeamSetting('alpha', value)} color="text-amber-400" />
                         <div className="grid grid-cols-2 gap-2 pt-1">
                           <button onClick={partialReset} className="flex items-center justify-center gap-2 p-2.5 rounded-xl border bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-white/20 transition-all">
                             <RotateCcw size={12} />

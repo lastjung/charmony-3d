@@ -37,6 +37,7 @@ interface BeamCollision {
   x: number;
   pan: number;
   distance: number;
+  energy: number;
 }
 
 interface RayDefinition {
@@ -89,8 +90,13 @@ const createGhostTrail = (): GhostTrail => ({
   expiresAt: 0,
 });
 
-const getVisibleHeadPosition = (ray: PooledRay) => {
-  if (ray.points.length === 0) return EMPTY_POINT;
+const getVisibleHeadState = (ray: PooledRay) => {
+  if (ray.points.length === 0) {
+    return {
+      position: EMPTY_POINT,
+      direction: new THREE.Vector3(0, -1, 0),
+    };
+  }
 
   let remaining = Math.min(ray.progress, ray.totalLength);
   for (let i = 1; i < ray.points.length; i++) {
@@ -101,10 +107,20 @@ const getVisibleHeadPosition = (ray: PooledRay) => {
       remaining -= segmentLength;
       continue;
     }
-    return segmentLength > EPS ? start.clone().lerp(end, remaining / segmentLength) : start;
+    const direction = end.clone().sub(start).normalize();
+    return {
+      position: segmentLength > EPS ? start.clone().lerp(end, remaining / segmentLength) : start.clone(),
+      direction: direction.lengthSq() > EPS ? direction : new THREE.Vector3(0, -1, 0),
+    };
   }
 
-  return ray.points[ray.points.length - 1];
+  const finalPoint = ray.points[ray.points.length - 1];
+  const prevPoint = ray.points[ray.points.length - 2] ?? finalPoint;
+  const direction = finalPoint.clone().sub(prevPoint).normalize();
+  return {
+    position: finalPoint,
+    direction: direction.lengthSq() > EPS ? direction : new THREE.Vector3(0, -1, 0),
+  };
 };
 
 const appendVisibleSegments = (
@@ -160,7 +176,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
   alpha,
   resetToken,
 }) => {
-  const EMITTER_ORBIT_RADIUS = 6;
+  const EMITTER_ORIGIN = new THREE.Vector3(0, 5, 0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const impactVoicePoolRef = useRef<ImpactVoicePool | null>(null);
   const poolCursorRef = useRef(0);
@@ -170,6 +186,8 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
   const lineSegmentsRef = useRef<THREE.LineSegments>(null);
   const ghostLineSegmentsRef = useRef<THREE.LineSegments>(null);
   const headMeshRef = useRef<THREE.InstancedMesh>(null);
+  const leadPointMeshRef = useRef<THREE.InstancedMesh>(null);
+  const prevIsPlayingRef = useRef(isPlaying);
   const linePositionsRef = useRef<Float32Array | null>(null);
   const ghostPositionsRef = useRef<Float32Array | null>(null);
   const audioDensityRef = useRef(0);
@@ -220,16 +238,10 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
   }, [activeShape]);
 
   const emitterState = useMemo(() => {
-    const revolutionRad = THREE.MathUtils.degToRad(revolution);
-    const origin = new THREE.Vector3(0, 6, 0);
+    const origin = EMITTER_ORIGIN.clone();
     const rotationRad = THREE.MathUtils.degToRad(rotation);
     const spreadRad = THREE.MathUtils.degToRad(spread);
-    origin.set(
-      Math.cos(revolutionRad) * EMITTER_ORBIT_RADIUS,
-      Math.sin(revolutionRad) * EMITTER_ORBIT_RADIUS,
-      0
-    );
-    const baseDirection = new THREE.Vector3(-Math.sin(rotationRad), Math.cos(rotationRad), 0).normalize();
+    const baseDirection = new THREE.Vector3(Math.cos(rotationRad), Math.sin(rotationRad), 0).normalize();
     const perpendicular = new THREE.Vector3(-baseDirection.y, baseDirection.x, 0).normalize();
 
     return {
@@ -238,9 +250,14 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       perpendicular,
       spreadRad,
     };
-  }, [revolution, rotation, spread]);
+  }, [rotation, spread]);
 
   const maxSegments = Math.max(1, rayNumber * (bounceLimit + 1));
+  const densityAlphaFactor = useMemo(() => {
+    const alphaFromDensity = 28 / Math.sqrt(Math.max(24, rayNumber));
+    return Math.max(0.42, Math.min(1, alphaFromDensity));
+  }, [rayNumber]);
+
   const lineGeometry = useMemo(() => {
     const positions = new Float32Array(maxSegments * 2 * 3);
     const geometry = new THREE.BufferGeometry();
@@ -264,9 +281,9 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       new THREE.LineBasicMaterial({
         color: new THREE.Color(`hsl(${shape.hue}, 100%, 90%)`),
         transparent: true,
-        opacity: Math.min(1, (alpha / 3) * 1.2),
+        opacity: Math.min(0.72, Math.max(0.2, (alpha / 3) * 1.45 * densityAlphaFactor)),
       }),
-    [alpha, shape.hue]
+    [alpha, densityAlphaFactor, shape.hue]
   );
 
   const ghostBeamMaterial = useMemo(
@@ -274,9 +291,9 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       new THREE.LineBasicMaterial({
         color: new THREE.Color(`hsl(${shape.hue}, 100%, 85%)`),
         transparent: true,
-        opacity: Math.min(0.45, (alpha / 3) * 0.4),
+        opacity: Math.min(0.22, Math.max(0.045, (alpha / 3) * 0.5 * densityAlphaFactor)),
       }),
-    [alpha, shape.hue]
+    [alpha, densityAlphaFactor, shape.hue]
   );
 
   const shapeGhostMaterial = useMemo(
@@ -318,9 +335,15 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
     if (ghostPositionsRef.current) ghostPositionsRef.current.fill(0);
     if (lineGeometry) lineGeometry.setDrawRange(0, 0);
     if (ghostLineGeometry) ghostLineGeometry.setDrawRange(0, 0);
+    if (isPlaying) {
+      const now = Date.now();
+      for (let i = 0; i < rayNumber; i++) {
+        activateNextRay(now);
+      }
+    }
   };
 
-  const playImpactSound = (xPos: number, pan: number, velocity = 1) => {
+  const playImpactSound = (xPos: number, pan: number, velocity = 1, priority = velocity) => {
     if (isMuted || !isPlaying) return;
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -338,7 +361,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       noteFromX(xPos),
       velocity,
       pan,
-      velocity
+      priority
     );
   };
 
@@ -465,18 +488,20 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       }
 
       if (hitT === Infinity) {
-        const exitPoint = currentPos.clone().add(currentDir.clone().multiplyScalar(20));
+        const exitPoint = currentPos.clone().add(currentDir.clone().multiplyScalar(18));
         totalLength += currentPos.distanceTo(exitPoint);
         points.push(exitPoint);
         break;
       }
 
       totalLength += currentPos.distanceTo(hitPoint);
+      const incidenceEnergy = Math.max(0.2, Math.min(1, Math.abs(currentDir.dot(hitNormal))));
       points.push(hitPoint.clone());
       collisions.push({
         x: hitPoint.x,
         pan: normalizePan(hitPoint.x),
         distance: totalLength,
+        energy: incidenceEnergy,
       });
       currentDir.reflect(hitNormal).normalize();
       currentPos.copy(hitPoint).add(currentDir.clone().multiplyScalar(0.02));
@@ -570,6 +595,15 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
     );
   }, [instrument]);
 
+  useEffect(() => {
+    const wasPlaying = prevIsPlayingRef.current;
+    prevIsPlayingRef.current = isPlaying;
+
+    if (isPlaying && !wasPlaying) {
+      initializePool();
+    }
+  }, [isPlaying, rayNumber, activeShape, bounceLimit, isParallelLight, rotation, spread]);
+
   useFrame((_, delta) => {
     const now = Date.now();
     let activeRayCount = 0;
@@ -590,7 +624,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
             const impactConfig = getImpactInstrumentConfig(instrument);
             const centerWeight = 1 - Math.abs(collision.pan) * 0.35;
             const bounceWeight = Math.max(0.72, 1 - ray.nextCollisionIndex * 0.06);
-            const rawVelocity = centerWeight * bounceWeight;
+            const rawVelocity = centerWeight * bounceWeight * collision.energy;
             const adaptiveResponse = getAdaptiveImpactResponse(instrument, audioDensityRef.current);
             const adaptiveVelocity = Math.max(
               impactConfig.velocityFloor,
@@ -601,7 +635,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
               x: collision.x,
               pan: collision.pan,
               velocity: adaptiveVelocity,
-              priority: adaptiveVelocity * adaptiveResponse.priorityScale,
+              priority: adaptiveVelocity * adaptiveResponse.priorityScale * collision.energy,
             });
           }
           ray.nextCollisionIndex += 1;
@@ -609,21 +643,9 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
 
         if (ray.progress >= ray.totalLength) {
           pushGhostTrail(ray.points, now);
-          const definition = buildRayDefinition();
-          ray.born = now;
-          ray.progress = 0;
-          ray.totalLength = definition.totalLength;
-          ray.points = definition.points;
-          ray.collisions = definition.collisions;
-          ray.nextCollisionIndex = 0;
+          ray.alive = false;
+          ray.progress = ray.totalLength;
         }
-      }
-    }
-
-    if (isPlaying) {
-      while (activeRayCount < rayNumber) {
-        activateNextRay(now);
-        activeRayCount += 1;
       }
     }
 
@@ -638,24 +660,34 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
     const lineSegments = lineSegmentsRef.current;
     const ghostLineSegments = ghostLineSegmentsRef.current;
     const headMesh = headMeshRef.current;
-    if (!buffer || !ghostBuffer || !lineSegments || !ghostLineSegments || !headMesh) return;
+    const leadPointMesh = leadPointMeshRef.current;
+    if (!buffer || !ghostBuffer || !lineSegments || !ghostLineSegments || !headMesh || !leadPointMesh) return;
 
     let bufferCursor = 0;
     let ghostCursor = 0;
     let headIndex = 0;
-    const headScale = 0.05 + rayWidth * 0.03;
+    const headScale = 0.014 + rayWidth * 0.008;
+    const leadPointScale = Math.max(0.006, headScale * 0.46);
+    const leadPointOffset = Math.max(0.018, headScale * 1.6);
     const hiddenScale = 0.0001;
 
     for (const ray of rayPoolRef.current) {
       if (!ray.alive) continue;
 
       bufferCursor = appendVisibleSegments(ray, buffer, bufferCursor);
-      const headPosition = getVisibleHeadPosition(ray);
-      instanceDummy.position.copy(headPosition);
+      const headState = getVisibleHeadState(ray);
+      instanceDummy.position.copy(headState.position);
       instanceDummy.scale.setScalar(headScale);
 
       instanceDummy.updateMatrix();
       headMesh.setMatrixAt(headIndex, instanceDummy.matrix);
+
+      instanceDummy.position.copy(
+        headState.position.clone().add(headState.direction.clone().multiplyScalar(leadPointOffset))
+      );
+      instanceDummy.scale.setScalar(leadPointScale);
+      instanceDummy.updateMatrix();
+      leadPointMesh.setMatrixAt(headIndex, instanceDummy.matrix);
       headIndex += 1;
     }
 
@@ -664,6 +696,7 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       instanceDummy.scale.setScalar(hiddenScale);
       instanceDummy.updateMatrix();
       headMesh.setMatrixAt(i, instanceDummy.matrix);
+      leadPointMesh.setMatrixAt(i, instanceDummy.matrix);
     }
 
     for (const ghost of ghostTrailsRef.current) {
@@ -683,9 +716,10 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
     lineGeometry.setDrawRange(0, bufferCursor / 3);
     ghostLineGeometry.setDrawRange(0, ghostCursor / 3);
     headMesh.instanceMatrix.needsUpdate = true;
+    leadPointMesh.instanceMatrix.needsUpdate = true;
 
     pendingImpacts.forEach(({ x, pan, velocity, priority }) =>
-      playImpactSound(x, pan, Math.max(velocity, priority * 0.92))
+      playImpactSound(x, pan, velocity, priority)
     );
   });
 
@@ -693,14 +727,14 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
     <group>
       <group position={emitterState.origin.toArray()}>
         <mesh>
-          <sphereGeometry args={[0.12, 20, 20]} />
+          <sphereGeometry args={[0.065, 16, 16]} />
           <meshStandardMaterial
-            color="white"
-            emissive={new THREE.Color(`hsl(${shape.hue}, 100%, 70%)`)}
-            emissiveIntensity={4}
+            color={new THREE.Color('#f8fafc')}
+            emissive={new THREE.Color('#ffffff')}
+            emissiveIntensity={2.2}
           />
         </mesh>
-        <pointLight color={new THREE.Color(`hsl(${shape.hue}, 100%, 80%)`)} intensity={3} distance={12} />
+        <pointLight color={new THREE.Color('#ffffff')} intensity={0.9} distance={5} />
       </group>
 
       <primitive object={shapeGhostLine} />
@@ -708,8 +742,8 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
       <pointLight
         position={[0, 1, 0]}
         color={new THREE.Color(`hsl(${shape.hue}, 100%, 60%)`)}
-        intensity={1.5}
-        distance={8}
+        intensity={0.55}
+        distance={5}
       />
 
       <lineSegments ref={ghostLineSegmentsRef} geometry={ghostLineGeometry} material={ghostBeamMaterial} frustumCulled={false} />
@@ -719,9 +753,17 @@ export const BeamCollider3D: React.FC<BeamCollider3DProps> = ({
         <meshStandardMaterial
           color={new THREE.Color(`hsl(${shape.hue}, 100%, 96%)`)}
           emissive={new THREE.Color(`hsl(${shape.hue}, 100%, 75%)`)}
-          emissiveIntensity={4 + rayWidth * 0.4}
+          emissiveIntensity={1.2 + rayWidth * 0.12}
           transparent
-          opacity={Math.min(1, (alpha / 3) * 1.2)}
+          opacity={Math.min(0.18, Math.max(0.05, (alpha / 3) * 0.55 * densityAlphaFactor))}
+        />
+      </instancedMesh>
+      <instancedMesh ref={leadPointMeshRef} args={[undefined, undefined, rayNumber]} frustumCulled={false}>
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial
+          color={new THREE.Color(`hsl(${shape.hue}, 100%, 98%)`)}
+          transparent
+          opacity={Math.min(0.26, Math.max(0.08, (alpha / 3) * 0.7 * densityAlphaFactor))}
         />
       </instancedMesh>
     </group>

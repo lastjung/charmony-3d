@@ -301,3 +301,28 @@ What is still incomplete:
 - priority is still heuristic, not based on measured collision energy
 - adaptive pool resizing is still not implemented
 - audio mix tuning across very high ray counts still needs ear-based polish
+
+### Update: Collision-Energy Priority Added
+
+Work completed:
+
+- each beam collision now stores an energy value derived from the incidence angle against the hit normal
+- impact velocity and priority now include that collision energy instead of relying only on center/bounce heuristics
+- browser test notes were updated so manual QA can check whether stronger head-on collisions actually read louder and clearer
+
+Files changed:
+
+- [BeamCollider3D.tsx](/Users/eric/PG/charmony-3d/src/components/BeamCollider3D.tsx)
+- [beam-test-plan.md](/Users/eric/PG/charmony-3d/docs/beam-test-plan.md)
+
+What is improved already:
+
+- priority is now partly grounded in beam geometry rather than only UI-side heuristics
+- grazing hits should give way to more direct collisions more consistently under pressure
+- upcoming browser QA has clearer audio checkpoints for dense beam passages
+
+What is still incomplete:
+
+- collision energy is angle-based only, not a fuller physical energy model
+- adaptive pool resizing is still not implemented
+- audio mix tuning across very high ray counts still needs ear-based polish

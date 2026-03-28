@@ -1,73 +1,96 @@
-# Beam Simulation Final Test Plan
+# Beam Test Plan
 
-이 문서는 `charmony-3d`의 빔 시뮬레이션 개편 작업(Phase 1~7)에 대한 최종 성능 및 기능 검증을 목표로 합니다.
+## Scope
 
----
+이 문서는 **현재 구현 기준으로 바로 브라우저에서 확인 가능한 항목만** 남긴 테스트 문서다.
 
-## 1. 성능 및 안정성 테스트 (Performance & Stability)
+다음 항목은 여기서 제외한다.
 
-### 1-1. 고밀도 스트레스 테스트
-*   **방법:** `RAY NUMBER`를 1,000개 이상으로 설정하고, `BEAM SPEED`를 최대로 높임.
-*   **수락 기준:** 60 FPS (또는 120 FPS 모니터 기준 주사율) 유지. 빔이 몰리는 상황에서도 UI 응답성 저하가 없어야 함.
-*   **체크포인트:** `InstancedMesh` 및 `LineSegments` 버퍼 업데이트 부하 확인.
+- ray renderer 근본 교체
+- ray visibility 최종 검증
+- `LineBasicMaterial` 한계 해결
 
-### 1-2. 장시간 기동 테스트
-*   **방법:** 빔 자동 모드(Auto Mode)를 켜둔 채로 10분 이상 시뮬레이션 유지.
-*   **수락 기준:** 메모리 누수(Memory Leak)에 의한 브라우저 탭 크래시 없음. Web Audio 컨텍스트 오류 없음.
+위 내용은 별도 문서 [ray-rendering-plan.md](/Users/eric/PG/charmony-3d/docs/ray-rendering-plan.md) 에서 다룬다.
 
 ---
 
-## 2. 기하학 및 좌표계 테스트 (Geometry & Semantics)
+## Jaemin Browser Check
 
-### 2-1. 좌표계 수직 정렬 확인
-*   **방법:** 빔이 바닥(Grid)에 닿는 순간의 시각적 일치 여부 확인.
-*   **수락 기준:** `gridHelper` 바닥면과 빔의 헤드가 만나는 지점이 정확히 0 오프셋이어야 함.
+### 1. Lissajous / Lorenz sound
 
-### 2-2. 각도 규약 및 에미터 궤도 확인
-*   **방법:** `REVOLUTION` 변경 시 에미터가 원형 궤도를 도는지, `ROTATION` 0°가 정확히 상측(+Y)을 향하는지 확인.
-*   **수락 기준:**
-    *   0° = 정면 위 (+Y)
-    *   -90° = 정면 아래 (-Y)
-    *   90° = 왼쪽 (-X)
-    *   에미터의 위치와 발사 방향이 독립적으로 제어됨.
+확인:
+
+- `Play`를 누르면 소리가 바로 나는지
+- beam에 비해 지나치게 작지 않은지
+- `piano`, `xylophone`, `bell`을 바꿨을 때 성격 차이가 바로 들리는지
+
+실패 조건:
+
+- `Play`를 눌러도 무음
+- 처음에만 나고 다시 재생하면 안 남
+- beam에 비해 너무 작아서 존재감이 거의 없음
+
+### 2. Mode isolation
+
+확인:
+
+- lissajous에서 `Play`를 눌렀을 때 beam이 같이 시작되지 않는지
+- beam에서 `Play`를 눌렀을 때 lissajous / lorenz 재생 상태와 섞이지 않는지
+
+실패 조건:
+
+- 한 모드 재생이 다른 모드 state를 건드림
+
+### 3. Beam controls sanity
+
+확인:
+
+- `Reset` 시 기본 beam 세팅으로 돌아가는지
+- `Partial Reset` 시 현재 beam 세팅은 유지되고 발사만 다시 되는지
+- `Rotation 270`에서 아래 방향으로 시작하는지
+- 광원 표시가 `(0, 5, 0)` 부근에서 보이는지
+
+실패 조건:
+
+- reset / partial reset 구분이 없음
+- 기본 방향이 아래로 안 보임
+- 광원 위치가 명백히 어긋남
+
+### 4. Beam audio sanity
+
+확인:
+
+- beam 충돌 시 소리가 나는지
+- 악기를 바꾸면 충돌음 캐릭터가 같이 바뀌는지
+- 고밀도에서 브라우저가 즉시 깨지지 않는지
+
+실패 조건:
+
+- 충돌음이 안 남
+- instrument 변경이 반영되지 않음
+- 짧은 조작만으로 심한 끊김 발생
 
 ---
 
-## 3. 오디오 엔진 테스트 (Audio Engine)
+## Notes
 
-### 3-1. 보이스 풀링 및 재사용성
-*   **방법:** 대량의 빔이 동시에 충돌할 때 소리 깨짐(Clipping)이나 노이즈 확인.
-*   **수락 기준:** 14개 이상의 동시 보이스가 `oldest-stealing` 로직에 의해 부드럽게 순환됨. 새로운 노드 생성에 의한 프레임 드롭 없음.
-
-### 3-2. 악기 및 음감 테스트
-*   **방법:** 악기를 교체(`Piano` -> `Xylophone` 등)하며 즉각적인 톤 변경 확인.
-*   **수락 기준:** 빔의 X 위치에 따른 음의 높낮이(Panning 포함)가 `audioSynth.ts`의 스케일 정의와 일치함.
+- 현재 가장 큰 미해결 이슈는 `ray visibility`다.
+- 재민이 테스트에서는 이 항목을 “이미 알려진 문제”로 분리해서 봐야 한다.
+- 즉 이번 브라우저 테스트의 목적은:
+  - 나머지 업데이트가 안정적인지 확인
+  - ray 문제 외에 숨은 회귀가 없는지 확인
 
 ---
 
-## 4. 인터랙션 및 UX 테스트 (Interaction)
+## Expected Outcome
 
-### 4-1. 자동화 및 수동 개입 (Auto/Manual)
-*   **방법:** 슬라이더 라벨 클릭으로 Auto Mode 진입 후, 슬라이더를 직접 드래그.
-*   **수락 기준:** 슬라이더 조작 즉시 해당 항목의 Auto Mode 아이콘이 꺼지고 수동 값으로 고정됨.
+브라우저 테스트 후에는 결과를 아래 세 가지로 정리하면 된다.
 
-### 4-2. 리셋 및 부분 리셋 (Reset)
-*   **방법:** `Reset` 버튼과 `Partial Reset` 버튼 클릭.
-*   **수락 기준:** 
-    *   `Reset`: 모든 설정 초기화 및 빔 풀 비우기.
-    *   `Partial Reset`: 현재 설정 유지한 채 빔만 다시 발사.
+1. 통과
+   ray 문제를 제외하면 동작 안정
 
----
+2. 부분 통과
+   ray 외에 소리 / reset / mode isolation 중 1개 이상 추가 이슈 있음
 
-## 5. 비주얼 퀄리티 테스트 (Visual Quality)
-
-### 5-1. 삼중 레이어 합성 확인
-*   **방법:** 빔 발사 후 사라질 때의 잔상 확인.
-*   **수락 기준:** 
-    *   `Active`: 빔의 선두가 동적으로 움직임.
-    *   `Ghost`: 빔이 소멸된 후 설정된 시간(900ms) 동안 자리에 남아 페이드 아웃됨.
-    *   `Head`: 인스턴싱된 구체(Sphere)가 빔 끝점에 정확히 위치함.
-
----
-**Prepared by:** Antigravity (AI Coding Assistant)
-**Date:** 2026-03-28
+3. 실패
+   ray 외에 기본 재생 동작 자체가 아직 불안정함

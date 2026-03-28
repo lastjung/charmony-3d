@@ -35,14 +35,14 @@ const DEFAULT_BEAM_AUTO_MODES: BeamAutoModes = {
 
 export const DEFAULT_BEAM_SETTINGS: BeamSettings = {
   shape: 'parabola',
-  revolution: -148,
-  rotation: 58,
-  spread: 330,
-  count: 1000,
-  speed: 96.98612347264257,
-  width: 2.1,
-  reflections: 19,
-  alpha: 1,
+  revolution: 0,
+  rotation: 270,
+  spread: 24,
+  count: 120,
+  speed: 2.4,
+  width: 0.45,
+  reflections: 8,
+  alpha: 0.42,
   isParallelLight: false,
 };
 
@@ -78,11 +78,11 @@ export function useBeamSettings() {
       const next = { ...prev };
 
       if (beamAutoModes.revolution) next.revolution = Math.sin(elapsedSeconds * 0.4) * 180;
-      if (beamAutoModes.rotation) next.rotation = Math.sin(elapsedSeconds * 0.8) * 180;
-      if (beamAutoModes.spread) next.spread = 30 + ((Math.sin(elapsedSeconds * 0.7) + 1) / 2) * 330;
-      if (beamAutoModes.count) next.count = Math.round(20 + ((Math.sin(elapsedSeconds * 0.9) + 1) / 2) * 980);
-      if (beamAutoModes.speed) next.speed = 10 + ((Math.sin(elapsedSeconds * 0.6) + 1) / 2) * 90;
-      if (beamAutoModes.reflections) next.reflections = Math.round(1 + ((Math.sin(elapsedSeconds * 0.5) + 1) / 2) * 19);
+      if (beamAutoModes.rotation) next.rotation = ((Math.sin(elapsedSeconds * 0.8) + 1) / 2) * 360;
+      if (beamAutoModes.spread) next.spread = 8 + ((Math.sin(elapsedSeconds * 0.7) + 1) / 2) * 72;
+      if (beamAutoModes.count) next.count = Math.round(40 + ((Math.sin(elapsedSeconds * 0.9) + 1) / 2) * 240);
+      if (beamAutoModes.speed) next.speed = 0.8 + ((Math.sin(elapsedSeconds * 0.6) + 1) / 2) * 3.4;
+      if (beamAutoModes.reflections) next.reflections = Math.round(2 + ((Math.sin(elapsedSeconds * 0.5) + 1) / 2) * 10);
 
       return next;
     });

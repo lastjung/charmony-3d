@@ -13,6 +13,7 @@ import { LissajousCurve } from './components/LissajousCurve';
 import { LissajousModMath } from './components/LissajousModMath';
 import LorenzAttractor from './components/LorenzAttractor';
 import { ControlSlider } from './components/ControlSlider';
+import { BeamCollider3D } from './components/BeamCollider3D';
 import { PlayerBox } from './components/PlayerBox';
 
 // Hooks & Constants
@@ -42,7 +43,13 @@ export default function App() {
   const [isPlotting, setIsPlotting] = useState(false);
   const [plotSpeed, setPlotSpeed] = useState(0.005);
   const [soundMode, setSoundMode] = useState<'math' | 'mech' | 'ambient'>('math');
+  const [soundProfile, setSoundProfile] = useState<'piano' | 'bell' | 'percussion'>('piano');
   const [isMuted, setIsMuted] = useState(false);
+
+  // Beam Specific State
+  const [beamShape, setBeamShape] = useState<'semicircle' | 'V' | 'parabola' | 'U'>('parabola');
+  const [beamSpawnRate, setBeamSpawnRate] = useState(0.04);
+  const [beamBounceLimit, setBeamBounceLimit] = useState(5);
 
   // Lissajous Specific State
   const [freqX, setFreqX] = useState(2);
@@ -174,7 +181,7 @@ export default function App() {
     }
 
     return () => {};
-  }, [isPlotting, isMuted, soundMode]);
+  }, [isPlotting, isMuted, soundMode, soundProfile, mode]);
 
   // Update Parameters: Frequency, Panning, Filter (Dynamic 3D Mapping)
   useEffect(() => {
@@ -221,7 +228,7 @@ export default function App() {
         }
       }
     }
-  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, soundMode, mode]);
+  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, soundMode, soundProfile, mode]);
 
   // Animation loop for automatic parameters
   useEffect(() => {
@@ -386,17 +393,24 @@ export default function App() {
                   />
                 )}
               </>
-            ) : (
+            ) : mode === 'lorenz' ? (
               <LorenzAttractor 
                 sigma={sigma} rho={rho} beta={beta} 
                 speed={lorenzSpeed} numPoints={numPointsLorenz}
                 color={color} isRainbow={isRainbow} isProRain={isProRain}
                 drawProgress={drawProgress} audioVolume={audioVolume}
-                opacity={opacity}
-                autoRotate={autoRotate}
-                autoRotateSpeed={autoRotateSpeed}
+                opacity={opacity} autoRotate={autoRotate} autoRotateSpeed={autoRotateSpeed}
                 showHead={showHead}
               />
+            ) : (
+              <group position={[0, -5, 0]}>
+                <BeamCollider3D 
+                  isPlaying={isPlotting} isMuted={isMuted} 
+                  activeShape={beamShape} spawnRate={beamSpawnRate} 
+                  bounceLimit={beamBounceLimit} soundType={soundProfile}
+                  soundMode={soundMode}
+                />
+              </group>
             )}
           </group>
           
@@ -424,10 +438,10 @@ export default function App() {
                 className="flex flex-col pointer-events-auto"
               >
                 <h1 className="text-2xl font-bold tracking-tighter text-white flex items-center gap-2">
-                  {mode === 'lissajous' ? 'LISSAJOUS' : 'LORENZ'} <span className="text-zinc-500 font-light italic text-xl">3D</span>
+                  {mode === 'lissajous' ? 'LISSAJOUS' : mode === 'lorenz' ? 'LORENZ' : 'BEAM'} <span className="text-zinc-500 font-light italic text-xl">3D</span>
                 </h1>
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
-                  {mode === 'lissajous' ? 'Frequency Explorer' : 'Chaos Visualization'}
+                  {mode === 'lissajous' ? 'Frequency Explorer' : mode === 'lorenz' ? 'Chaos Visualization' : 'Physics Collider'}
                 </p>
               </motion.div>
             )}
@@ -441,20 +455,13 @@ export default function App() {
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="flex gap-1 p-1 bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-full"
+                  className="flex bg-zinc-950/40 backdrop-blur-3xl p-1 rounded-full border border-white/5 shadow-2xl"
                 >
-                  <button 
-                    onClick={() => setMode('lissajous')}
-                    className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'lissajous' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
-                  >
-                    Lissajous
-                  </button>
-                  <button 
-                    onClick={() => setMode('lorenz')}
-                    className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'lorenz' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
-                  >
-                    Lorenz
-                  </button>
+                  {['lissajous', 'lorenz', 'beam'].map((m) => (
+                    <button key={m} onClick={() => setMode(m as any)} className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-zinc-500 hover:text-white'}`}>
+                      {m}
+                    </button>
+                  ))}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -517,20 +524,23 @@ export default function App() {
                          {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                        </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5 focus-within:ring-0">
-                      {['math', 'mech', 'ambient'].map((m) => (
-                        <button 
-                          key={m}
-                          onClick={() => setSoundMode(m as any)}
-                          className={`py-2 rounded-lg text-[8px] font-black uppercase tracking-tighter transition-all border ${
-                            soundMode === m && !isMuted
-                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' 
-                              : 'bg-zinc-900 border-zinc-950 text-zinc-600 hover:text-zinc-400'
-                          }`}
-                        >
-                          {m}
-                        </button>
-                      ))}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Waveform Mode</span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {['math', 'mech', 'ambient'].map((m) => (
+                            <button key={m} onClick={() => setSoundMode(m as any)} className={`py-1.5 rounded-lg text-[8px] font-black uppercase border transition-all ${soundMode === m && !isMuted ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-zinc-900 border-zinc-950 text-zinc-600'}`}>{m}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Instrument Profile</span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {['piano', 'bell', 'percussion'].map((p) => (
+                            <button key={p} onClick={() => setSoundProfile(p as any)} className={`py-1.5 rounded-lg text-[8px] font-black uppercase border transition-all ${soundProfile === p && !isMuted ? 'bg-amber-600/20 border-amber-500/50 text-amber-400' : 'bg-zinc-900 border-zinc-950 text-zinc-600'}`}>{p}</button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="h-px bg-zinc-800/50" />
@@ -834,7 +844,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                  ) : (
+                  ) : mode === 'lorenz' ? (
                     <div className="space-y-5">
                       <div className="grid grid-cols-2 gap-1.5">
                         {LORENZ_PRESETS.map((p) => (
@@ -842,11 +852,27 @@ export default function App() {
                         ))}
                       </div>
                       <div className="space-y-3">
-                        <ControlSlider label="Sigma (σ)" value={sigma} min={1} max={50} step={0.1} onChange={setSigma} />
-                        <ControlSlider label="Rho (ρ)" value={rho} min={1} max={150} step={0.1} onChange={setRho} />
-                        <ControlSlider label="Beta (β)" value={beta} min={0.1} max={10} step={0.001} onChange={setBeta} />
-                        <ControlSlider label="Step Size (dt)" value={lorenzSpeed} min={0.001} max={0.05} step={0.001} onChange={setLorenzSpeed} />
-                        <ControlSlider label="Points" value={numPointsLorenz} min={1000} max={20000} step={500} onChange={setNumPointsLorenz} />
+                        <ControlSlider label="Sigma (σ)" value={sigma} min={1} max={50} step={0.1} onChange={setSigma} color="text-blue-400" />
+                        <ControlSlider label="Rho (ρ)" value={rho} min={1} max={150} step={0.1} onChange={setRho} color="text-purple-400" />
+                        <ControlSlider label="Beta (β)" value={beta} min={0.1} max={10} step={0.001} onChange={setBeta} color="text-pink-400" />
+                        <div className="h-px bg-zinc-800/30 my-1" />
+                        <ControlSlider label="Lorenz Step" value={lorenzSpeed} min={0.001} max={0.05} step={0.001} onChange={setLorenzSpeed} color="text-emerald-400" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Geometry Type</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {['semicircle', 'V', 'parabola', 'U'].map((s) => (
+                            <button key={s} onClick={() => setBeamShape(s as any)} className={`py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${beamShape === s ? 'bg-white text-black border-white shadow-lg' : 'bg-zinc-900 border-zinc-950 text-zinc-600 hover:text-white'}`}>{s}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Dynamics</span>
+                        <ControlSlider label="Spawn Rate" value={beamSpawnRate} min={0.01} max={0.2} step={0.01} onChange={setBeamSpawnRate} color="text-amber-400" />
+                        <ControlSlider label="Reflect Limit" value={beamBounceLimit} min={1} max={15} step={1} onChange={setBeamBounceLimit} color="text-orange-400" />
                       </div>
                     </div>
                   )}

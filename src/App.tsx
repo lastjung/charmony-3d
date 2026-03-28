@@ -18,6 +18,7 @@ import { PlayerBox } from './components/PlayerBox';
 
 // Hooks & Constants
 import { useAudioReactivity } from './hooks/useAudioReactivity';
+import { useBeamSettings } from './hooks/useBeamSettings';
 import { LISSAJOUS_PRESETS, LORENZ_PRESETS } from './constants/presets';
 import {
   createContinuousSynth,
@@ -54,17 +55,16 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
 
   // Beam Specific State
-  const [beamShape, setBeamShape] = useState<'semicircle' | 'V' | 'parabola' | 'U'>('parabola');
-  const [beamRevolution, setBeamRevolution] = useState(-148);
-  const [beamRotation, setBeamRotation] = useState(58);
-  const [beamSpread, setBeamSpread] = useState(330);
-  const [beamCount, setBeamCount] = useState(1000);
-  const [beamSpeed, setBeamSpeed] = useState(96.98612347264257);
-  const [beamWidth, setBeamWidth] = useState(2.1);
-  const [beamBounceLimit, setBeamBounceLimit] = useState(19);
-  const [beamAlpha, setBeamAlpha] = useState(1);
-  const [isParallelLight, setIsParallelLight] = useState(false);
-  const [beamResetToken, setBeamResetToken] = useState(0);
+  const {
+    beamSettings,
+    beamAutoModes,
+    beamResetToken,
+    updateBeamSetting,
+    toggleBeamAutoMode,
+    applyBeamAutoMotion,
+    resetBeamSettings,
+    restartBeamSimulation,
+  } = useBeamSettings();
 
   // Lissajous Specific State
   const [freqX, setFreqX] = useState(2);
@@ -238,6 +238,24 @@ export default function App() {
     return () => cancelAnimationFrame(frameId);
   }, [isAutoFreqX, isAutoFreqY, isAutoFreqZ, isAutoPhaseX, isAutoPhaseY, isAutoPhaseZ, isAutoCycles, freqX, freqY, freqZ]);
 
+  useEffect(() => {
+    let frameId: number;
+    const startTime = performance.now();
+
+    const animateBeamSettings = (time: number) => {
+      const elapsed = (time - startTime) / 1000;
+      applyBeamAutoMotion(elapsed);
+      frameId = requestAnimationFrame(animateBeamSettings);
+    };
+
+    if (mode === 'beam' && Object.values(beamAutoModes).some(Boolean)) {
+      frameId = requestAnimationFrame(animateBeamSettings);
+      return () => cancelAnimationFrame(frameId);
+    }
+
+    return () => {};
+  }, [applyBeamAutoMotion, beamAutoModes, mode]);
+
   // Animation loop for plotting
   useEffect(() => {
     let interval: any;
@@ -307,16 +325,7 @@ export default function App() {
       setMultiplier(2); setCycles(10); setShowModMath(false);
     } else {
       if (mode === 'beam') {
-        setBeamRevolution(-148);
-        setBeamRotation(58);
-        setBeamSpread(330);
-        setBeamCount(1000);
-        setBeamSpeed(96.98612347264257);
-        setBeamWidth(2.1);
-        setBeamBounceLimit(19);
-        setBeamAlpha(1);
-        setIsParallelLight(false);
-        setBeamResetToken(prev => prev + 1);
+        resetBeamSettings();
       } else {
         setSigma(10); setRho(28); setBeta(2.667); setLorenzSpeed(0.01);
       }
@@ -330,7 +339,7 @@ export default function App() {
     setDrawProgress(0);
     setIsPlotting(true);
     if (mode === 'beam') {
-      setBeamResetToken(prev => prev + 1);
+      restartBeamSimulation();
     }
   };
 
@@ -353,7 +362,7 @@ export default function App() {
         <axesHelper args={[8]} />
         
         <Suspense fallback={null}>
-          <group position={[0, -5, 0]}>
+          <group position={[0, -2.5, 0]}>
             <gridHelper args={[20, 20, '#1e1e1e', '#1e1e1e']} />
           </group>
 
@@ -394,17 +403,17 @@ export default function App() {
               <group position={[0, -2.5, 0]}>
                 <BeamCollider3D 
                   isPlaying={isPlotting} isMuted={isMuted} 
-                  activeShape={beamShape}
-                  bounceLimit={beamBounceLimit}
+                  activeShape={beamSettings.shape}
+                  bounceLimit={beamSettings.reflections}
                   instrument={instrument}
-                  isParallelLight={isParallelLight}
-                  beamSpeed={beamSpeed}
-                  rayNumber={beamCount}
-                  revolution={beamRevolution}
-                  rotation={beamRotation}
-                  spread={beamSpread}
-                  rayWidth={beamWidth}
-                  alpha={beamAlpha}
+                  isParallelLight={beamSettings.isParallelLight}
+                  beamSpeed={beamSettings.speed}
+                  rayNumber={beamSettings.count}
+                  revolution={beamSettings.revolution}
+                  rotation={beamSettings.rotation}
+                  spread={beamSettings.spread}
+                  rayWidth={beamSettings.width}
+                  alpha={beamSettings.alpha}
                   resetToken={beamResetToken}
                 />
               </group>
@@ -856,27 +865,28 @@ export default function App() {
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Geometry Type</span>
                         <div className="grid grid-cols-2 gap-1.5">
                           {['semicircle', 'V', 'parabola', 'U'].map((s) => (
-                            <button key={s} onClick={() => setBeamShape(s as any)} className={`py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${beamShape === s ? 'bg-white text-black border-white shadow-lg' : 'bg-zinc-900 border-zinc-950 text-zinc-600 hover:text-white'}`}>{s}</button>
+                            <button key={s} onClick={() => updateBeamSetting('shape', s as any)} className={`py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${beamSettings.shape === s ? 'bg-white text-black border-white shadow-lg' : 'bg-zinc-900 border-zinc-950 text-zinc-600 hover:text-white'}`}>{s}</button>
                           ))}
                         </div>
                       </div>
                       <div className="space-y-4">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Beam Settings</span>
                         <button
-                          onClick={() => setIsParallelLight(!isParallelLight)}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all ${isParallelLight ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+                          onClick={() => updateBeamSetting('isParallelLight', !beamSettings.isParallelLight)}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all ${beamSettings.isParallelLight ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
                         >
                           <span className="text-[9px] font-bold uppercase">Parallel Light</span>
-                          <div className={`w-1.5 h-1.5 rounded-full ${isParallelLight ? 'bg-sky-300' : 'bg-zinc-700'}`} />
+                          <div className={`w-1.5 h-1.5 rounded-full ${beamSettings.isParallelLight ? 'bg-sky-300' : 'bg-zinc-700'}`} />
                         </button>
-                        <ControlSlider label="1. Revolution" value={beamRevolution} min={-180} max={180} step={1} onChange={setBeamRevolution} color="text-blue-400" />
-                        <ControlSlider label="2. Rotation" value={beamRotation} min={-180} max={180} step={1} onChange={setBeamRotation} color="text-cyan-400" />
-                        <ControlSlider label="3. Beam Spread" value={beamSpread} min={0} max={360} step={1} onChange={setBeamSpread} color="text-emerald-400" />
-                        <ControlSlider label="4. Ray Number" value={beamCount} min={20} max={1000} step={1} onChange={setBeamCount} color="text-violet-400" />
-                        <ControlSlider label="5. Ray Speed" value={beamSpeed} min={0} max={100} step={0.001} onChange={setBeamSpeed} color="text-sky-400" />
-                        <ControlSlider label="6. Ray Width" value={beamWidth} min={0.5} max={8} step={0.1} onChange={setBeamWidth} color="text-fuchsia-400" />
-                        <ControlSlider label="7. Reflections" value={beamBounceLimit} min={1} max={20} step={1} onChange={setBeamBounceLimit} color="text-orange-400" />
-                        <ControlSlider label="8. Alpha" value={beamAlpha} min={0.2} max={3} step={0.05} onChange={setBeamAlpha} color="text-amber-400" />
+                        <div className="text-[8px] text-zinc-500 font-mono uppercase pl-1">Angles: 0 deg = +Y, -90 deg = -Y, 90 deg = -X</div>
+                        <ControlSlider label="1. Revolution" value={beamSettings.revolution} min={-180} max={180} step={1} onChange={(value) => updateBeamSetting('revolution', value)} color="text-blue-400" isAuto={beamAutoModes.revolution} onAutoToggle={() => toggleBeamAutoMode('revolution')} />
+                        <ControlSlider label="2. Rotation" value={beamSettings.rotation} min={-180} max={180} step={1} onChange={(value) => updateBeamSetting('rotation', value)} color="text-cyan-400" isAuto={beamAutoModes.rotation} onAutoToggle={() => toggleBeamAutoMode('rotation')} />
+                        <ControlSlider label="3. Beam Spread" value={beamSettings.spread} min={0} max={360} step={1} onChange={(value) => updateBeamSetting('spread', value)} color="text-emerald-400" isAuto={beamAutoModes.spread} onAutoToggle={() => toggleBeamAutoMode('spread')} />
+                        <ControlSlider label="4. Ray Number" value={beamSettings.count} min={20} max={1000} step={1} onChange={(value) => updateBeamSetting('count', value)} color="text-violet-400" isAuto={beamAutoModes.count} onAutoToggle={() => toggleBeamAutoMode('count')} />
+                        <ControlSlider label="5. Ray Speed" value={beamSettings.speed} min={0} max={100} step={0.001} onChange={(value) => updateBeamSetting('speed', value)} color="text-sky-400" isAuto={beamAutoModes.speed} onAutoToggle={() => toggleBeamAutoMode('speed')} />
+                        <ControlSlider label="6. Ray Width" value={beamSettings.width} min={0.5} max={8} step={0.1} onChange={(value) => updateBeamSetting('width', value)} color="text-fuchsia-400" />
+                        <ControlSlider label="7. Reflections" value={beamSettings.reflections} min={1} max={20} step={1} onChange={(value) => updateBeamSetting('reflections', value)} color="text-orange-400" isAuto={beamAutoModes.reflections} onAutoToggle={() => toggleBeamAutoMode('reflections')} />
+                        <ControlSlider label="8. Alpha" value={beamSettings.alpha} min={0.2} max={3} step={0.05} onChange={(value) => updateBeamSetting('alpha', value)} color="text-amber-400" />
                         <div className="grid grid-cols-2 gap-2 pt-1">
                           <button onClick={partialReset} className="flex items-center justify-center gap-2 p-2.5 rounded-xl border bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-white/20 transition-all">
                             <RotateCcw size={12} />

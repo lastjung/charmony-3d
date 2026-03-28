@@ -47,6 +47,38 @@ export interface ContinuousSynth {
   panner: StereoPannerNode;
 }
 
+interface ImpactVoiceLayer {
+  osc: OscillatorNode;
+  gain: GainNode;
+}
+
+interface ImpactVoice {
+  filter: BiquadFilterNode;
+  output: GainNode;
+  panner: StereoPannerNode;
+  layers: ImpactVoiceLayer[];
+  busyUntil: number;
+  lastVelocity: number;
+  startedAt: number;
+}
+
+export interface ImpactVoicePool {
+  instrument: Instrument;
+  voices: ImpactVoice[];
+}
+
+interface ImpactInstrumentConfig {
+  poolSize: number;
+  velocityFloor: number;
+  velocityExponent: number;
+}
+
+export interface AdaptiveImpactResponse {
+  velocityFloor: number;
+  velocityExponent: number;
+  priorityScale: number;
+}
+
 const IMPACT_TIMBRES: Record<Instrument, InstrumentTimbre> = {
   piano: {
     layers: [
@@ -203,6 +235,56 @@ const CONTINUOUS_VOICINGS: Record<Instrument, ContinuousInstrumentVoicing> = {
   },
 };
 
+const IMPACT_INSTRUMENT_CONFIGS: Record<Instrument, ImpactInstrumentConfig> = {
+  piano: {
+    poolSize: 16,
+    velocityFloor: 0.34,
+    velocityExponent: 1.2,
+  },
+  xylophone: {
+    poolSize: 15,
+    velocityFloor: 0.28,
+    velocityExponent: 1.32,
+  },
+  bell: {
+    poolSize: 18,
+    velocityFloor: 0.38,
+    velocityExponent: 1.08,
+  },
+  marimba: {
+    poolSize: 14,
+    velocityFloor: 0.32,
+    velocityExponent: 1.18,
+  },
+  glass: {
+    poolSize: 17,
+    velocityFloor: 0.36,
+    velocityExponent: 1.1,
+  },
+  mech: {
+    poolSize: 12,
+    velocityFloor: 0.4,
+    velocityExponent: 0.96,
+  },
+};
+
+export const getImpactInstrumentConfig = (instrument: Instrument): ImpactInstrumentConfig =>
+  IMPACT_INSTRUMENT_CONFIGS[instrument];
+
+export const getAdaptiveImpactResponse = (
+  instrument: Instrument,
+  density: number
+): AdaptiveImpactResponse => {
+  const config = IMPACT_INSTRUMENT_CONFIGS[instrument];
+  const clampedDensity = Math.max(0, Math.min(1, density));
+
+  return {
+    velocityFloor: Math.min(0.62, config.velocityFloor + clampedDensity * 0.12),
+    velocityExponent: Math.max(0.88, config.velocityExponent - clampedDensity * 0.18),
+    priorityScale: 1 + clampedDensity * 0.24,
+  };
+};
+
 export const createContinuousSynth = (
   ctx: AudioContext,
   instrument: Instrument
@@ -281,6 +363,162 @@ export const releaseContinuousSynth = (synth: ContinuousSynth, ctx: AudioContext
     synth.master.disconnect();
     synth.panner.disconnect();
   }, 180);
+};
+
+const createImpactVoice = (ctx: AudioContext, instrument: Instrument): ImpactVoice => {
+  const timbre = IMPACT_TIMBRES[instrument];
+  const filter = ctx.createBiquadFilter();
+  const output = ctx.createGain();
+  const panner = ctx.createStereoPanner();
+  const layers = timbre.layers.map((layer) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = layer.type;
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.start();
+    return { osc, gain };
+  });
+
+  filter.type = timbre.filterType;
+  filter.Q.value = timbre.filterQ;
+  filter.frequency.value = timbre.filterStart;
+  output.gain.value = 0.0001;
+  panner.pan.value = 0;
+
+  filter.connect(output);
+  output.connect(panner);
+  panner.connect(ctx.destination);
+
+  return {
+    filter,
+    output,
+    panner,
+    layers,
+    busyUntil: 0,
+    lastVelocity: 0,
+    startedAt: 0,
+  };
+};
+
+const triggerImpactVoice = (
+  voice: ImpactVoice,
+  ctx: AudioContext,
+  instrument: Instrument,
+  freq: number,
+  velocity: number,
+  pan: number
+) => {
+  const timbre = IMPACT_TIMBRES[instrument];
+  const now = ctx.currentTime;
+  const safeVelocity = Math.max(0.2, velocity);
+  const attackTime = now + timbre.attack;
+  const releaseTime = now + timbre.decay;
+
+  voice.filter.type = timbre.filterType;
+  voice.filter.Q.cancelScheduledValues(now);
+  voice.filter.frequency.cancelScheduledValues(now);
+  voice.filter.Q.setValueAtTime(timbre.filterQ, now);
+  voice.filter.frequency.setValueAtTime(timbre.filterStart, now);
+  voice.filter.frequency.exponentialRampToValueAtTime(Math.max(80, timbre.filterEnd), releaseTime);
+
+  voice.output.gain.cancelScheduledValues(now);
+  voice.output.gain.setValueAtTime(0.0001, now);
+  voice.output.gain.exponentialRampToValueAtTime(
+    Math.max(0.0002, timbre.gain * safeVelocity),
+    attackTime
+  );
+  voice.output.gain.exponentialRampToValueAtTime(0.0001, releaseTime);
+
+  voice.panner.pan.cancelScheduledValues(now);
+  voice.panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), now);
+
+  voice.layers.forEach((voiceLayer, index) => {
+    const layer = timbre.layers[index];
+    voiceLayer.osc.type = layer.type;
+    voiceLayer.osc.frequency.cancelScheduledValues(now);
+    voiceLayer.osc.detune.cancelScheduledValues(now);
+    voiceLayer.gain.gain.cancelScheduledValues(now);
+
+    voiceLayer.osc.frequency.setValueAtTime(Math.max(40, freq * layer.ratio), now);
+    voiceLayer.osc.detune.setValueAtTime(layer.detune ?? 0, now);
+    voiceLayer.gain.gain.setValueAtTime(Math.max(0.0001, layer.gain * safeVelocity), now);
+    voiceLayer.gain.gain.exponentialRampToValueAtTime(0.0001, now + timbre.decay * 0.9);
+  });
+
+  voice.busyUntil = releaseTime + 0.08;
+  voice.lastVelocity = safeVelocity;
+  voice.startedAt = now;
+};
+
+export const createImpactVoicePool = (
+  ctx: AudioContext,
+  instrument: Instrument,
+  size = 12
+): ImpactVoicePool => ({
+  instrument,
+  voices: Array.from({ length: size }, () => createImpactVoice(ctx, instrument)),
+});
+
+export const playPooledImpactVoice = (
+  pool: ImpactVoicePool,
+  ctx: AudioContext,
+  instrument: Instrument,
+  freq: number,
+  velocity = 1,
+  pan = 0,
+  priority = velocity
+) => {
+  if (pool.instrument !== instrument) {
+    pool.instrument = instrument;
+  }
+
+  const now = ctx.currentTime;
+  let selectedVoice = pool.voices[0];
+  let bestStealScore = Number.POSITIVE_INFINITY;
+
+  for (const voice of pool.voices) {
+    if (voice.busyUntil <= now) {
+      selectedVoice = voice;
+      break;
+    }
+
+    const remaining = Math.max(0, voice.busyUntil - now);
+    const age = Math.max(0, now - voice.startedAt);
+    const stealScore = voice.lastVelocity * 0.75 + remaining * 0.2 - age * 0.08;
+
+    if (stealScore < bestStealScore) {
+      bestStealScore = stealScore;
+      selectedVoice = voice;
+    }
+  }
+
+  if (selectedVoice.busyUntil > now) {
+    const currentImportance = selectedVoice.lastVelocity * 0.7 + Math.max(0, selectedVoice.busyUntil - now) * 0.25;
+    const incomingImportance = Math.max(0.2, priority) * 0.9 + velocity * 0.35;
+    if (incomingImportance < currentImportance * 0.72) {
+      return;
+    }
+  }
+
+  triggerImpactVoice(selectedVoice, ctx, instrument, freq, velocity, pan);
+};
+
+export const disposeImpactVoicePool = (pool: ImpactVoicePool) => {
+  pool.voices.forEach((voice) => {
+    voice.layers.forEach((layer) => {
+      try {
+        layer.osc.stop();
+      } catch {}
+      layer.osc.disconnect();
+      layer.gain.disconnect();
+    });
+    voice.filter.disconnect();
+    voice.output.disconnect();
+    voice.panner.disconnect();
+  });
+  pool.voices = [];
 };
 
 export const playImpactVoice = (

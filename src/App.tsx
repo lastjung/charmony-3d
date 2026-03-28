@@ -3,13 +3,17 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars, ContactShadows } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings2, RotateCcw, Share2, Info, Github, Play, Pause, Zap, Camera, Mic, Sparkles, Eye, EyeOff, Maximize, Minimize, Layers } from 'lucide-react';
+import { 
+  Settings2, RotateCcw, Share2, Info, Github, Play, Pause, Zap, Camera, Mic, Sparkles, 
+  Eye, EyeOff, Maximize, Minimize, Layers, Music, Volume2, VolumeX, Briefcase, Activity
+} from 'lucide-react';
 
 // Components
 import { LissajousCurve } from './components/LissajousCurve';
 import { LissajousModMath } from './components/LissajousModMath';
 import LorenzAttractor from './components/LorenzAttractor';
 import { ControlSlider } from './components/ControlSlider';
+import { PlayerBox } from './components/PlayerBox';
 
 // Hooks & Constants
 import { useAudioReactivity } from './hooks/useAudioReactivity';
@@ -37,6 +41,8 @@ export default function App() {
   const [drawProgress, setDrawProgress] = useState(1);
   const [isPlotting, setIsPlotting] = useState(false);
   const [plotSpeed, setPlotSpeed] = useState(0.005);
+  const [soundMode, setSoundMode] = useState<'math' | 'mech' | 'ambient'>('math');
+  const [isMuted, setIsMuted] = useState(false);
 
   // Lissajous Specific State
   const [freqX, setFreqX] = useState(2);
@@ -74,6 +80,17 @@ export default function App() {
 
   const audioVolume = useAudioReactivity(isAudioReactive);
 
+  // Global Keyboard listener for HUD recovery (Esc to exit full view)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   // Prevent accidental zoom on trackpad scroll while keeping pinch-zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -101,6 +118,110 @@ export default function App() {
       }
     }
   }, [audioVolume, isAudioReactive, audioSensitivity, mode]);
+
+  // Generative Sound Logic (Ref-based for proper cleanup)
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+  const activeOscRef = React.useRef<OscillatorNode | null>(null);
+  const activeGainRef = React.useRef<GainNode | null>(null);
+  const activePanRef = React.useRef<StereoPannerNode | null>(null);
+  const activeFilterRef = React.useRef<BiquadFilterNode | null>(null);
+
+  // Life Cycle: Start / Stop Oscillator & Nodes
+  useEffect(() => {
+    // 1. Cleanup previous sound always
+    if (activeOscRef.current) {
+      const osc = activeOscRef.current;
+      const gain = activeGainRef.current;
+      if (gain) gain.gain.setTargetAtTime(0, audioCtxRef.current!.currentTime, 0.05);
+      setTimeout(() => {
+        try { osc.stop(); osc.disconnect(); } catch(e) {}
+      }, 100);
+      activeOscRef.current = null;
+      activeGainRef.current = null;
+    }
+
+    // 2. Start nodes if plotting and not muted
+    if (isPlotting && !isMuted) {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const panner = ctx.createStereoPanner();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = soundMode === 'math' ? 'triangle' : soundMode === 'mech' ? 'square' : 'sine';
+      filter.type = 'lowpass';
+      filter.Q.value = 5;
+      
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.1);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(panner);
+      panner.connect(ctx.destination);
+      
+      osc.start();
+
+      activeOscRef.current = osc;
+      activeGainRef.current = gain;
+      activePanRef.current = panner;
+      activeFilterRef.current = filter;
+    }
+
+    return () => {};
+  }, [isPlotting, isMuted, soundMode]);
+
+  // Update Parameters: Frequency, Panning, Filter (Dynamic 3D Mapping)
+  useEffect(() => {
+    if (activeOscRef.current && audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      
+      // Calculate 3D Position of Head from progress
+      let x = 0, y = 0, z = 0;
+      if (mode === 'lissajous') {
+        const t = drawProgress * Math.PI * 2 * cycles;
+        x = Math.sin(t * freqX + phaseX);
+        y = Math.sin(t * freqY + phaseY);
+        z = Math.sin(t * freqZ + phaseZ);
+      } else {
+        // Simplified Lorenz mapping (pseudo-approximation based on progress)
+        x = Math.sin(drawProgress * 50) * Math.cos(drawProgress * 20);
+        y = Math.cos(drawProgress * 40);
+        z = Math.sin(drawProgress * 30);
+      }
+
+      // 1. Pitch Mapping (Y-axis) - Wider 400Hz - 1200Hz range
+      const baseFreq = soundMode === 'math' ? 220 : soundMode === 'mech' ? 110 : 80;
+      const freq = baseFreq + ((y + 1) * 400) + (freqY * 10);
+      activeOscRef.current.frequency.setTargetAtTime(freq, ctx.currentTime, 0.05);
+
+      // 2. Panning Mapping (X-axis) - Stereo L/R
+      if (activePanRef.current) {
+        activePanRef.current.pan.setTargetAtTime(x * 0.8, ctx.currentTime, 0.05);
+      }
+
+      // 3. Filter Mapping (Z-axis) - Brightness modulation
+      if (activeFilterRef.current) {
+        const cutoff = 400 + ((z + 1) * 2000);
+        activeFilterRef.current.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.05);
+      }
+
+      // 4. Gain Modulation (Mech Pulsing)
+      if (activeGainRef.current) {
+        if (soundMode === 'mech') {
+          const pulse = Math.floor(drawProgress * 150) % 2 === 0 ? 0.05 : 0.01;
+          activeGainRef.current.gain.setTargetAtTime(pulse, ctx.currentTime, 0.01);
+        } else {
+          activeGainRef.current.gain.setTargetAtTime(0.05, ctx.currentTime, 0.1);
+        }
+      }
+    }
+  }, [drawProgress, freqX, freqY, freqZ, phaseX, phaseY, phaseZ, cycles, soundMode, mode]);
 
   // Animation loop for automatic parameters
   useEffect(() => {
@@ -212,6 +333,20 @@ export default function App() {
     setColor('#3b82f6'); setIsRainbow(false); setDrawProgress(1);
     setIsPlotting(false); setIsAutoMultiplier(false); setIsOrbit(false);
     setIsAudioReactive(false);
+  };
+
+  const partialReset = () => {
+    setDrawProgress(0);
+    setIsPlotting(true);
+  };
+
+  const nextPreset = () => {
+    const presets = mode === 'lissajous' ? LISSAJOUS_PRESETS : LORENZ_PRESETS;
+    const currentName = presets.find(p => p.color === color)?.name; // Rough check
+    const currentIndex = presets.findIndex(p => p.name === currentName);
+    const nextItem = presets[(currentIndex + 1) % presets.length];
+    if (mode === 'lissajous') applyLissajousPreset(nextItem);
+    else applyLorenzPreset(nextItem);
   };
 
   return (
@@ -372,6 +507,32 @@ export default function App() {
                       </motion.div>
                     )}
                   </div>
+                  <div className="p-3 bg-zinc-900/50 border border-white/5 rounded-2xl space-y-3 mt-4">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                         <Music size={12} className="text-zinc-500" />
+                         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Sound Mode</span>
+                       </div>
+                       <button onClick={() => setIsMuted(!isMuted)} className={isMuted ? 'text-zinc-600' : 'text-blue-400 font-bold'}>
+                         {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                       </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5 focus-within:ring-0">
+                      {['math', 'mech', 'ambient'].map((m) => (
+                        <button 
+                          key={m}
+                          onClick={() => setSoundMode(m as any)}
+                          className={`py-2 rounded-lg text-[8px] font-black uppercase tracking-tighter transition-all border ${
+                            soundMode === m && !isMuted
+                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' 
+                              : 'bg-zinc-900 border-zinc-950 text-zinc-600 hover:text-zinc-400'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="h-px bg-zinc-800/50" />
                   <div className="space-y-4">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Cinematic</span>
@@ -487,55 +648,25 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Bottom Playback Bar */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto">
-            <AnimatePresence>
-              {isUIVisible && (
-                <motion.div 
-                  initial={{ y: 50, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 50, opacity: 0 }}
-                  className="flex items-center gap-4 px-6 py-3 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl mb-4"
-                >
-                  <button 
-                    onClick={() => { if (!isPlotting && drawProgress >= 0.99) setDrawProgress(0); setIsPlotting(!isPlotting); }}
-                    className={`p-3 rounded-full transition-all ${isPlotting ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
-                    title={isPlotting ? "Pause" : "Play Animation"}
-                  >
-                    {isPlotting ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-                  </button>
-
-                  <div className="w-48 h-1.5 bg-zinc-800 rounded-full overflow-hidden relative group cursor-pointer" onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    setDrawProgress(x / rect.width);
-                  }}>
-                    <motion.div 
-                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-emerald-500"
-                      animate={{ width: `${drawProgress * 100}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={reset}
-                      className="p-2.5 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-all"
-                      title="Reset Parameters"
-                    >
-                      <RotateCcw size={18} />
-                    </button>
-                    <button 
-                      onClick={() => setIsFullscreen(!isFullscreen)}
-                      className={`p-2.5 rounded-full transition-all ${isFullscreen ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'}`}
-                      title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Mode"}
-                    >
-                      {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+        <AnimatePresence>
+          {isUIVisible && !isFullscreen && (
+            <PlayerBox 
+              isPlotting={isPlotting}
+              setIsPlotting={setIsPlotting}
+              drawProgress={drawProgress}
+              setDrawProgress={setDrawProgress}
+              reset={reset}
+              partialReset={partialReset}
+              nextPreset={nextPreset}
+              plotSpeed={plotSpeed}
+              setPlotSpeed={setPlotSpeed}
+              isMuted={isMuted}
+              setIsMuted={setIsMuted}
+              isFullscreen={isFullscreen}
+              setIsFullscreen={setIsFullscreen}
+            />
+          )}
+        </AnimatePresence>
 
           {/* Right Sidebar */}
           <AnimatePresence>

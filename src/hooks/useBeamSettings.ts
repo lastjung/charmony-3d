@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 export type BeamShape = 'semicircle' | 'V' | 'parabola' | 'U';
 
@@ -50,6 +50,7 @@ export function useBeamSettings() {
   const [beamSettings, setBeamSettings] = useState<BeamSettings>(DEFAULT_BEAM_SETTINGS);
   const [beamAutoModes, setBeamAutoModes] = useState<BeamAutoModes>(DEFAULT_BEAM_AUTO_MODES);
   const [beamResetToken, setBeamResetToken] = useState(0);
+  const hasBeamAutoMotion = useMemo(() => Object.values(beamAutoModes).some(Boolean), [beamAutoModes]);
 
   const updateBeamSetting = <K extends keyof BeamSettings>(key: K, value: BeamSettings[K]) => {
     const autoKeyMap: Partial<Record<keyof BeamSettings, keyof BeamAutoModes>> = {
@@ -73,7 +74,9 @@ export function useBeamSettings() {
     setBeamAutoModes((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const applyBeamAutoMotion = (elapsedSeconds: number) => {
+  const applyBeamAutoMotion = useCallback((elapsedSeconds: number) => {
+    if (!hasBeamAutoMotion) return;
+
     setBeamSettings((prev) => {
       const next = { ...prev };
 
@@ -84,9 +87,20 @@ export function useBeamSettings() {
       if (beamAutoModes.speed) next.speed = 0.8 + ((Math.sin(elapsedSeconds * 0.6) + 1) / 2) * 3.4;
       if (beamAutoModes.reflections) next.reflections = Math.round(2 + ((Math.sin(elapsedSeconds * 0.5) + 1) / 2) * 10);
 
+      if (
+        next.revolution === prev.revolution &&
+        next.rotation === prev.rotation &&
+        next.spread === prev.spread &&
+        next.count === prev.count &&
+        next.speed === prev.speed &&
+        next.reflections === prev.reflections
+      ) {
+        return prev;
+      }
+
       return next;
     });
-  };
+  }, [beamAutoModes, hasBeamAutoMotion]);
 
   const resetBeamSettings = () => {
     setBeamSettings(DEFAULT_BEAM_SETTINGS);
@@ -101,6 +115,7 @@ export function useBeamSettings() {
   return {
     beamSettings,
     beamAutoModes,
+    hasBeamAutoMotion,
     beamResetToken,
     updateBeamSetting,
     toggleBeamAutoMode,

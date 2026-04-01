@@ -59,6 +59,7 @@ export default function App() {
   const {
     beamSettings,
     beamAutoModes,
+    hasBeamAutoMotion,
     beamResetToken,
     updateBeamSetting,
     toggleBeamAutoMode,
@@ -240,22 +241,22 @@ export default function App() {
   }, [isAutoFreqX, isAutoFreqY, isAutoFreqZ, isAutoPhaseX, isAutoPhaseY, isAutoPhaseZ, isAutoCycles, freqX, freqY, freqZ]);
 
   useEffect(() => {
-    let frameId: number;
+    let intervalId: number | undefined;
     const startTime = performance.now();
 
-    const animateBeamSettings = (time: number) => {
-      const elapsed = (time - startTime) / 1000;
+    const animateBeamSettings = () => {
+      const elapsed = (performance.now() - startTime) / 1000;
       applyBeamAutoMotion(elapsed);
-      frameId = requestAnimationFrame(animateBeamSettings);
     };
 
-    if (mode === 'beam' && Object.values(beamAutoModes).some(Boolean)) {
-      frameId = requestAnimationFrame(animateBeamSettings);
-      return () => cancelAnimationFrame(frameId);
+    if (mode === 'beam' && hasBeamAutoMotion) {
+      animateBeamSettings();
+      intervalId = window.setInterval(animateBeamSettings, 33);
+      return () => window.clearInterval(intervalId);
     }
 
     return () => {};
-  }, [applyBeamAutoMotion, beamAutoModes, mode]);
+  }, [applyBeamAutoMotion, hasBeamAutoMotion, mode]);
 
   // Animation loop for plotting
   useEffect(() => {

@@ -130,6 +130,199 @@
         opacity: 1;
         font-weight: 900;
       }
+
+      /* Apple Premium Side Box (Right) */
+      #ui-root-right {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 100;
+      }
+      .control-panel {
+        width: 260px;
+        background: rgba(10, 10, 15, 0.45) !important;
+        backdrop-filter: blur(32px) saturate(120%) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(120%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6) !important;
+      }
+      .sidebar-grip {
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
+        margin: 0 auto 12px;
+        cursor: grab;
+      }
+
+      .settings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin-top: 10px;
+      }
+
+      .setting-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: all 0.3s ease;
+      }
+
+      /* Auto Mode Logic */
+      .setting-row.auto-active {
+        --row-color: #ff453a !important;
+      }
+      .setting-row.auto-active .auto-indicator {
+        color: #ff453a;
+        opacity: 1;
+        animation: breathe 2s infinite ease-in-out;
+      }
+
+      @keyframes breathe {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.3); opacity: 1; }
+      }
+
+      .setting-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+        user-select: none;
+      }
+      .setting-header:hover {
+        color: #fff;
+      }
+      .auto-indicator {
+        font-size: 8px;
+        color: var(--row-color);
+        opacity: 0.3;
+      }
+      .setting-label {
+        flex: 1;
+        text-transform: uppercase;
+      }
+      .slider-value {
+        font-family: monospace;
+        color: var(--row-color);
+        font-weight: 700;
+        min-width: 35px;
+        text-align: right;
+      }
+
+      /* Apple Premium Slider */
+      .apple-slider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        outline: none;
+      }
+      .apple-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border: 2px solid var(--row-color);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .apple-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.3);
+      }
+      /* Color Theme Grid (4x2) */
+      .color-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-top: 10px;
+      }
+      .color-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        padding: 0;
+        position: relative;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      .color-btn:hover {
+        transform: scale(1.2);
+        border-color: #fff;
+        z-index: 10;
+      }
+      .color-btn.active {
+        border-color: #fff;
+        box-shadow: 0 0 15px var(--glow-color, #fff);
+      }
+      
+      /* Premium Tooltip implementation */
+      .color-btn::after {
+        content: attr(title);
+        position: absolute;
+        bottom: 140%;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        background: rgba(0, 0, 0, 0.8);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        color: #fff;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      .color-btn:hover::after {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      
+      /* Target Selectors (Capsule style) */
+      .target-group {
+        display: flex;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 4px;
+        margin-top: 8px;
+        gap: 4px;
+      }
+      .target-btn {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.4);
+        padding: 6px 0;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+      }
+      .target-btn:hover {
+        color: #fff;
+      }
+      .target-btn.active {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
     </style>
     <script type="importmap">
 			{
@@ -211,6 +404,91 @@
         </div>
       </div>
     </div>
-    <script type="module" src="index.js"></script>
+
+    <div id="ui-root-right">
+      <div class="side-box control-panel">
+        <div class="sidebar-grip"></div>
+        <div class="box-header">
+          <h2>Lighting Dynamics</h2>
+        </div>
+        
+        <div class="settings-list">
+          <!-- Atmosphere (Hemisphere) -->
+          <div class="setting-row" id="row-ambient" style="--row-color: #00f2ff;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">1. Atmosphere</label>
+              <span class="slider-value" id="val-ambient">2.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-ambient" min="0" max="5" step="0.1" value="2.0" />
+          </div>
+
+          <!-- Highlight (Directional) -->
+          <div class="setting-row" id="row-direct" style="--row-color: #ff9d00;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">2. Highlight</label>
+              <span class="slider-value" id="val-direct">1.5</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-direct" min="0" max="5" step="0.1" value="1.5" />
+          </div>
+
+          <div class="category-header">Position Control</div>
+
+          <!-- Light X -->
+          <div class="setting-row" id="row-x" style="--row-color: #ff4dff;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">3. Axis X</label>
+              <span class="slider-value" id="val-x">5.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-x" min="-10" max="10" step="0.1" value="5.0" />
+          </div>
+
+          <!-- Light Y -->
+          <div class="setting-row" id="row-y" style="--row-color: #4dff4d;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">4. Axis Y</label>
+              <span class="slider-value" id="val-y">10.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-y" min="0" max="20" step="0.1" value="10.0" />
+          </div>
+
+          <!-- Light Z -->
+          <div class="setting-row" id="row-z" style="--row-color: #4d4dff;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">5. Axis Z</label>
+              <span class="slider-value" id="val-z">7.5</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-z" min="-10" max="10" step="0.1" value="7.5" />
+          </div>
+        </div>
+
+        <!-- Premium Selection Target -->
+        <div class="category-header" style="margin-top: 15px;">Selection Target</div>
+        <div class="target-group" id="target-selector">
+          <button class="target-btn" data-mode="surface">Surface</button>
+          <button class="target-btn" data-mode="edges">Edges</button>
+          <button class="target-btn active" data-mode="composite">Composite</button>
+        </div>
+
+        <!-- Premium Color Themes (4-Column Grid) -->
+        <div class="category-header">Color Palette</div>
+        <div class="color-grid" id="theme-grid">
+          <button class="color-btn" data-theme="rainbow" title="Rainbow" style="background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); --glow-color: #f00;"></button>
+          <button class="color-btn" data-theme="cosmic" title="Cosmic" style="background: conic-gradient(#0ff, #00f, #f0f, #f00, #0ff); --glow-color: #00f;"></button>
+          <button class="color-btn" data-theme="twilight" title="Twilight" style="background: conic-gradient(#ff0, #f80, #f0f, #80f, #ff0); --glow-color: #f80;"></button>
+          <button class="color-btn" data-theme="aurora" title="Aurora" style="background: conic-gradient(#0f8, #0ff, #80f, #f0f, #0f8); --glow-color: #0f8;"></button>
+          <button class="color-btn" data-theme="cyan" title="Cyan" style="background: #0ff; --glow-color: #0ff;"></button>
+          <button class="color-btn" data-theme="sunset" title="Sunset" style="background: #f40; --glow-color: #f40;"></button>
+          <button class="color-btn" data-theme="lime" title="Lime" style="background: #cf0; --glow-color: #cf0;"></button>
+          <button class="color-btn" data-theme="amethyst" title="Amethyst" style="background: #90f; --glow-color: #90f;"></button>
+        </div>
+      </div>
+      </div>
+    </div>
+    <script type="module" src="./index.js"></script>
   </body>
 </html>

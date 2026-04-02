@@ -3,267 +3,345 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ MASSIVE GPU INSTANCING EARTH</title>
+    <title>⚡ ULTIMATE GPU ENGINE | APPLE UI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+                "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/"
+            }
+        }
+    </script>
     <style>
         :root {
-            --glass-bg: rgba(20, 20, 25, 0.45);
-            --glass-border: rgba(255, 255, 255, 0.12);
-            --accent-cyan: #00f5ff;
-            --accent-purple: #bf5af2;
-            --accent-green: #32d74b;
+            --apple-glass-bg: rgba(10, 10, 15, 0.45);
+            --apple-glass-blur: blur(32px) saturate(140%);
+            --apple-glass-border: 1px solid rgba(255, 255, 255, 0.1);
+            --apple-accent-blue: #007aff;
+            --apple-accent-cyan: #00f5ff;
+            --apple-accent-red: #ff3b30;
+            --apple-font: 'Outfit', sans-serif;
+            --mono-font: 'JetBrains Mono', monospace;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
-        body { 
-            background: #000; 
-            color: #fff; 
-            font-family: 'Inter', sans-serif; 
-            overflow: hidden; 
-            height: 100vh;
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            color: #fff;
+            font-family: var(--apple-font);
+            overflow: hidden;
+            user-select: none;
         }
 
         canvas { display: block; }
 
-        /* PREMIUM GLASS HUD */
-        .hud-container {
+        /* --- APPLE SIDEBAR LEFT (Info) --- */
+        .apple-sidebar-left {
             position: absolute;
-            top: 24px;
-            left: 24px;
-            width: 320px;
-            backdrop-filter: blur(28px) saturate(180%);
-            -webkit-backdrop-filter: blur(28px) saturate(180%);
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            padding: 24px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            top: 30px;
+            left: 20px;
+            width: 240px;
+            background: var(--apple-glass-bg);
+            backdrop-filter: var(--apple-glass-blur);
+            -webkit-backdrop-filter: var(--apple-glass-blur);
+            border: var(--apple-glass-border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6);
             z-index: 100;
-            pointer-events: auto;
-            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
-        h1 {
-            font-family: 'Outfit', sans-serif;
-            font-weight: 700;
-            font-size: 1.2rem;
-            letter-spacing: 0.1em;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #fff 40%, var(--accent-cyan));
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-transform: uppercase;
+        .brief-title {
+            font-size: 13px; font-weight: 600;
+            margin-bottom: 12px; color: var(--apple-accent-cyan);
+            letter-spacing: 0.05em;
         }
 
-        .stat-panel {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .stat-item {
-            background: rgba(255, 255, 255, 0.04);
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .stat-label { font-size: 0.6rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; margin-bottom: 4px; }
-        .stat-value { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 1rem; color: var(--accent-cyan); }
-
-        .control-group { margin-bottom: 20px; }
-        .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .label-row label { font-size: 0.75rem; color: rgba(255, 255, 255, 0.8); }
-        .range-val { font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600; }
-
-        input[type="range"] {
-            width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 2px;
-            outline: none;
-            cursor: pointer;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 14px;
-            height: 14px;
-            background: #fff;
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
-        }
-
-        /* SHORTCUT HINTS */
-        .shortcuts {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            font-size: 0.65rem;
-            color: rgba(255, 255, 255, 0.4);
-            line-height: 1.6;
-        }
-
-        .key-hint { background: rgba(255, 255, 255, 0.1); padding: 2px 5px; border-radius: 4px; color: #fff; margin-right: 4px; }
-
-        .description-box {
-            margin-top: 24px;
-            padding: 16px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .description-box h3 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 0.65rem;
-            font-weight: 700;
-            color: var(--accent-cyan);
-            letter-spacing: 0.15em;
-            margin-bottom: 8px;
-        }
-
-        .description-box p {
-            font-size: 0.72rem;
-            line-height: 1.6;
-            color: rgba(255, 255, 255, 0.55);
-            font-weight: 300;
-        }
-
-        .description-box strong { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
-
-        .param-guide {
-            margin-top: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        .brief-content {
+            font-size: 11px; line-height: 1.6;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 15px;
         }
 
         .guide-item {
-            font-size: 0.62rem;
-            color: rgba(255, 255, 255, 0.4);
-            display: block;
+            display: flex; align-items: flex-start; gap: 8px;
+            margin-bottom: 8px; font-size: 10px;
         }
-
-        .guide-item strong {
-            color: var(--accent-cyan);
-            font-weight: 600;
-            margin-right: 4px;
+        .guide-key {
+            padding: 1px 4px; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.2);
+            font-family: var(--mono-font); font-size: 9px;
+            color: #fff; background: rgba(255,255,255,0.05);
         }
+        .guide-desc { color: rgba(255,255,255,0.5); }
 
-        .bottom-right {
+        /* --- APPLE SIDEBAR RIGHT (Settings) --- */
+        .apple-sidebar {
             position: absolute;
-            bottom: 24px;
-            right: 24px;
-            text-align: right;
-            pointer-events: none;
-        }
-
-        .version-tag { font-size: 0.6rem; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.2em; text-transform: uppercase; }
-        .mode-indicator { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 700; color: #fff; margin-top: 4px; opacity: 0.8; }
-
-        /* NAVIGATION BUTTONS */
-        .nav-panel {
-            position: absolute;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 12px;
+            top: 30px;
+            right: 20px;
+            width: 250px;
+            background: var(--apple-glass-bg);
+            backdrop-filter: var(--apple-glass-blur);
+            -webkit-backdrop-filter: var(--apple-glass-blur);
+            border: var(--apple-glass-border);
+            border-radius: 20px;
+            padding: 12px 16px 20px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6);
             z-index: 100;
         }
 
-        .mode-btn {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            backdrop-filter: blur(20px);
-            padding: 10px 20px;
-            border-radius: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 0.75rem;
-            font-weight: 600;
+        .sidebar-grip {
+            width: 36px; height: 4px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+            cursor: grab;
+        }
+
+        .setting-row { margin-bottom: 18px; }
+        .setting-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 6px;
+        }
+        .setting-label {
+            font-size: 11px; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            color: rgba(255,255,255,0.8);
+        }
+        .slider-value { font-family: var(--mono-font); font-size: 10px; color: var(--apple-accent-cyan); }
+
+        .apple-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%; height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+        .apple-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            background: #fff; border: 2px solid #000;
+            border-radius: 50%; cursor: pointer;
+        }
+
+        /* Mode Buttons inside Sidebar */
+        .mode-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .dock-item {
+            padding: 8px 4px;
+            text-align: center;
+            font-size: 9px; font-weight: 600;
+            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
         }
-
-        .mode-btn.active {
+        .dock-item:hover { background: rgba(255,255,255,0.1); }
+        .dock-item.active {
+            background: var(--apple-accent-blue);
             color: #fff;
-            background: rgba(0, 245, 255, 0.15);
-            border-color: var(--accent-cyan);
-            box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(0,122,255,0.3);
+            border-color: transparent;
         }
 
-        .mode-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.08); }
+        /* --- APPLE PLAY BOX (Bottom) --- */
+        .apple-player {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 32px;
+            padding: 0 16px;
+            background: var(--apple-glass-bg);
+            backdrop-filter: var(--apple-glass-blur);
+            -webkit-backdrop-filter: var(--apple-glass-blur);
+            border: var(--apple-glass-border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        .player-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .group-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-group { width: 140px; }
+        .playback-group { justify-content: center; }
+        .info-group { width: 140px; justify-content: flex-end; font-family: var(--mono-font); font-size: 10px; color: rgba(255,255,255,0.6); }
+
+        .player-btn {
+            background: none; border: none;
+            color: #fff; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+            padding: 4px;
+            border-radius: 6px;
+        }
+        .player-btn:hover { background: rgba(255,255,255,0.1); }
+        .player-btn.active { color: var(--apple-accent-blue); }
+        .player-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+        .apple-slider-vol {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 60px; height: 3px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 1.5px;
+            outline: none;
+        }
+        .apple-slider-vol::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 10px; height: 10px;
+            background: #fff; border-radius: 50%;
+        }
+
+        /* --- HEADER --- */
+        .top-left {
+            position: absolute; top: 30px; left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 50;
+        }
+        .engine-title {
+            font-size: 18px; font-weight: 600;
+            letter-spacing: -0.02em;
+            margin: 0;
+            background: linear-gradient(to right, #fff, rgba(255,255,255,0.4));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .engine-version {
+            font-family: var(--mono-font);
+            font-size: 9px; color: rgba(255,255,255,0.3);
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
-    <div class="hud-container">
-        <h1>GPU Data Engine</h1>
+    <div class="top-left">
+        <h1 class="engine-title">M-ENGINE GPGPU</h1>
+        <div class="engine-version">ULTIMATE V5.0 / <span id="current-mode" style="color:var(--apple-accent-cyan);">DATA FLOW</span> / 1,000,000 NODES</div>
+    </div>
+
+    <!-- APPLE SIDEBAR LEFT (Info) -->
+    <div class="apple-sidebar-left">
+        <div class="brief-title">PROJECT BRIEF</div>
+        <div class="brief-content">
+            본 시스템은 1,000,000개 이상의 개별 노드를 **GPGPU 쉐이더 아키텍처**로 제어합니다. 데이터 밀도와 흐름을 통해 전 세계의 연결성을 맑은 현악 소리와 함께 시각화합니다.
+        </div>
         
-        <div class="stat-panel">
-            <div class="stat-item">
-                <div class="stat-label">Instanced Nodes</div>
-                <div class="stat-value" id="node-count">150,000</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Render State</div>
-                <div class="stat-value" id="fps-val">60 FPS</div>
-            </div>
+        <div class="brief-title" style="font-size:11px; margin-top:20px;">SYSTEM CONTROL</div>
+        <div class="guide-item">
+            <span class="guide-key">SPACE</span>
+            <span class="guide-desc">PLAY / PAUSE SIMULATION</span>
         </div>
-
-        <div class="control-group">
-            <div class="label-row"><label>Data Density</label><div class="range-val" id="val-density">150k</div></div>
-            <input type="range" id="slider-density" min="1000" max="250000" step="1000" value="150000">
+        <div class="guide-item">
+            <span class="guide-key">S + 1~4</span>
+            <span class="guide-desc">QUICK MODE SWITCH</span>
         </div>
-
-        <div class="control-group">
-            <div class="label-row"><label>Flow Velocity</label><div class="range-val" id="val-flow">1.2x</div></div>
-            <input type="range" id="slider-flow" min="0" max="5" step="0.1" value="1.2">
-        </div>
-
-        <div class="control-group">
-            <div class="label-row"><label>Atmosphere Intensity</label><div class="range-val" id="val-atmos">2.0</div></div>
-            <input type="range" id="slider-atmos" min="0" max="5" step="0.1" value="2.0">
-        </div>
-
-        <div class="description-box">
-            <h3>ENGINE BRIEF</h3>
-            <p>이 시스템은 <strong>150,000개 이상의 개별 노드</strong>를 GPU 상에서 직접 제어하는 <strong>Massive Instancing</strong> 기법을 사용하여, 전 세계의 데이터 흐름(Data Flow)을 실시간으로 시각화합니다. </p>
-            
-            <div class="param-guide">
-                <span class="guide-item"><strong>Density/Flow/Atmos</strong>: 데이터 밀도, 속도, 대기광 조절</span>
-                <span class="guide-item"><strong>Data Flow</strong>: 구 표면을 흐르는 벡터 데이터 애니메이션</span>
-                <span class="guide-item"><strong>Network</strong>: 전 세계 인프라 노드의 정적 연결 구조 시각화</span>
-                <span class="guide-item"><strong>Heatmap</strong>: 데이터의 에너지 밀도를 맥동(Pulse)으로 표현</span>
-            </div>
-        </div>
-
-        <div class="shortcuts">
-            <p><span class="key-hint">S1</span> Point Cloud Cloud (Default)</p>
-            <p><span class="key-hint">S2</span> Network Mesh (Heatmap)</p>
-            <p><span class="key-hint">S3</span> Pulse Matrix (Rhythmic)</p>
-            <p><span class="key-hint">S4</span> Star Drift (Cosmological)</p>
+        <div class="guide-item">
+            <span class="guide-key">MOUSE</span>
+            <span class="guide-desc">CLICK TO TRIGGER WAVE CHORD</span>
         </div>
     </div>
 
-    <div class="nav-panel">
-        <button class="mode-btn active" data-mode="data">DATA FLOW</button>
-        <button class="mode-btn" data-mode="network">NETWORK</button>
-        <button class="mode-btn" data-mode="heat">HEATMAP</button>
+    <!-- APPLE SIDEBAR RIGHT (Settings) -->
+    <div class="apple-sidebar">
+        <div class="sidebar-grip"></div>
+        
+        <div class="setting-row" id="row-density">
+            <div class="setting-header">
+                <span class="setting-label">1. NODE DENSITY</span>
+                <span class="slider-value" id="val-density">150k</span>
+            </div>
+            <input type="range" id="slider-density" class="apple-slider" min="1000" max="1000000" step="1000" value="150000">
+        </div>
+
+        <div class="setting-row" id="row-flow">
+            <div class="setting-header">
+                <span class="setting-label">2. FLOW VELOCITY</span>
+                <span class="slider-value" id="val-flow">1.2x</span>
+            </div>
+            <input type="range" id="slider-flow" class="apple-slider" min="0" max="5" step="0.1" value="1.2">
+        </div>
+
+        <div class="setting-row" id="row-atmos">
+            <div class="setting-header">
+                <span class="setting-label">3. ATMOS RADIANCE</span>
+                <span class="slider-value" id="val-atmos">2.0</span>
+            </div>
+            <input type="range" id="slider-atmos" class="apple-slider" min="0" max="5" step="0.1" value="2.0">
+        </div>
+
+        <!-- NEW: VISUAL MODES INTEGRATED -->
+        <div class="setting-row" style="margin-top:25px;">
+            <div class="setting-header">
+                <span class="setting-label" style="color:var(--apple-accent-blue);">4. VISUALIZATION MODE</span>
+            </div>
+            <div class="mode-container">
+                <div class="dock-item active" data-mode="0">DATA FLOW</div>
+                <div class="dock-item" data-mode="1">NETWORK</div>
+                <div class="dock-item" data-mode="2">HEATMAP</div>
+                <div class="dock-item" data-mode="3">STAR DRIFT</div>
+            </div>
+        </div>
     </div>
 
-    <div class="bottom-right">
-        <div class="version-tag">STABLE V3.2 / GPU ENGINE</div>
-        <div class="mode-indicator" id="current-mode">DATA FLOW</div>
+    <!-- APPLE PLAY BOX (Bottom) -->
+    <div class="apple-player">
+        <div class="player-row">
+            <div class="group-container volume-group">
+                <button id="btn-mute" class="player-btn active">
+                    <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                </button>
+                <input type="range" id="slider-vol" class="apple-slider-vol" min="0" max="1" step="0.01" value="0.25">
+            </div>
+
+            <div class="group-container playback-group">
+                <button id="btn-prev" class="player-btn">
+                    <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button id="btn-play" class="player-btn active">
+                    <svg id="icon-play" viewBox="0 0 24 24" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button id="btn-next" class="player-btn">
+                    <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+            </div>
+
+            <div class="group-container info-group">
+                <span id="time-display">00:00:00</span>
+                <span id="val-fps" style="margin-left:10px; opacity:0.5;">60 FPS</span>
+                <button id="btn-fullscreen" class="player-btn" style="margin-left:10px;">
+                    <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="index.js"></script>

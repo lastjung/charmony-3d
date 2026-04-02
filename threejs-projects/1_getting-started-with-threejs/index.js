@@ -45,7 +45,7 @@ const wireMat = new LineMaterial({
 let targetMode = 'composite'; // surface, edges, composite
 let currentTheme = 'rainbow';
 const themes = {
-    rainbow: [0, 60, 120, 180, 240, 300],
+    rainbow: [0, 60, 120, 180, 240, 300, 360],
     cosmic: [190, 220, 260, 290],
     twilight: [50, 30, 310, 260, 250],
     aurora: [150, 180, 280, 320],
@@ -77,27 +77,28 @@ function updateVertexColors(mesh, line, themeName) {
     const stops = themes[themeName];
     if (!stops) return;
 
-    // 1. Mesh Vertex Colors (Full Spectrum Distribution)
+    // 1. Mesh Vertex Colors (Spatial Gradient Distribution)
     const geometry = mesh.geometry;
     const pos = geometry.attributes.position;
     const colors = [];
     const color = new THREE.Color();
-    
-    const totalFaces = pos.count / 3;
 
-    // Every face gets a unique color from the 360-degree spectrum
+    // To make a smooth gradient, we'll normalize the Y coordinate.
+    // Most standard geometries in this project are roughly between -1 and 1.
+    const normalizeY = (y) => (y + 1) / 2;
+
     for (let i = 0; i < pos.count; i += 3) {
-        const faceIndex = i / 3;
-        
-        // Distribution T: (0 to 1) based on face sequence
-        const t = faceIndex / totalFaces;
+        // Use the average Y of the three vertices for a consistent face color
+        const yAvg = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+        const t = THREE.MathUtils.clamp(normalizeY(yAvg), 0, 1);
         
         const hue = interpolate(t, stops);
         
         if (targetMode === 'surface' || targetMode === 'composite') {
             color.setHSL(hue / 360, 0.8, 0.5);
         } else {
-            color.setHex(0x0072ff); 
+            // Darker or subtle color when not active
+            color.setHex(0x111111); 
         }
 
         for (let j = 0; j < 3; j++) {
@@ -106,27 +107,28 @@ function updateVertexColors(mesh, line, themeName) {
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
-    // 2. Line Vertex Colors (Synchronized Linear Flow)
+    // 2. Line Vertex Colors (Spatial Gradient Distribution)
     const lineGeo = line.geometry;
     const linePos = lineGeo.attributes.instanceStart;
     const lineColors = [];
 
     if (linePos) {
-        const totalLines = linePos.count;
         for (let i = 0; i < linePos.count; i++) {
-            // LINEAR: Sequentially distribute hues just like faces
-            const t = i / totalLines; 
+            // Use the Y coordinate of the segment's start point
+            const y = linePos.getY(i);
+            const t = THREE.MathUtils.clamp(normalizeY(y), 0, 1);
+            
             const hue = interpolate(t, stops);
             
-            // Sync with Face Logic
-            const lineHue = (targetMode === 'composite') ? (hue + 10) % 360 : hue;
+            // For composite mode, slightly offset the line color for contrast if needed
+            const lineHue = (targetMode === 'composite') ? hue : hue;
             const saturation = 0.9;
             const luminance = (targetMode === 'edges') ? 0.6 : 0.7;
             
             if (targetMode === 'edges' || targetMode === 'composite') {
                 color.setHSL(lineHue / 360, saturation, luminance);
             } else {
-                color.setHex(0xffffff);
+                color.setHex(0x444444); // Subtle lines when not in focus
             }
             lineColors.push(color.r, color.g, color.b);
         }

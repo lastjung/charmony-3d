@@ -3,10 +3,223 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Robot Bobby Earth</title>
+    <title>Robot Bobby Earth - Control Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --glass-bg: rgba(25, 25, 25, 0.45);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --accent-color: #0072ff;
+        --text-color: #ffffff;
+      }
       body {
         margin: 0;
+        background-color: #000;
+        font-family: 'Outfit', sans-serif;
+        overflow: hidden;
+      }
+      #ui-root-left {
+        position: fixed;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .side-box {
+        background: var(--glass-bg);
+        backdrop-filter: blur(25px) saturate(180%);
+        -webkit-backdrop-filter: blur(25px) saturate(180%);
+        border: 1px solid var(--glass-border);
+        border-radius: 28px;
+        padding: 24px;
+        width: 220px;
+        max-height: 85vh;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+        display: flex;
+        flex-direction: column;
+      }
+      .box-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+      }
+      .box-header h2 {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+      }
+      .geometry-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        padding-right: 14px;
+        margin-right: -14px;
+        margin-bottom: 15px;
+      }
+      /* Custom Scrollbar */
+      .geometry-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .geometry-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .geometry-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+      }
+      .geo-btn {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 14px;
+        padding: 10px 16px;
+        color: rgba(255,255,255,0.7);
+        font-size: 13px;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        outline: none;
+        flex-shrink: 0;
+      }
+      .geo-btn:hover {
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+        transform: translateX(5px);
+        border-color: rgba(255,255,255,0.15);
+      }
+      .geo-btn.active {
+        background: var(--accent-color);
+        color: #fff;
+        box-shadow: 0 0 20px rgba(0, 114, 255, 0.4);
+        border-color: rgba(255,255,255,0.2);
+      }
+      .geo-btn .indicator {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+      .geo-btn.active .indicator {
+        opacity: 1;
+        font-weight: 900;
+      }
+      .category-header {
+        font-size: 9px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(255,255,255,0.25);
+        margin: 15px 0 8px 5px;
+      }
+      .category-header:first-child {
+        margin-top: 0;
+      }
+
+      /* Apple Premium Side Box (Right) */
+      #ui-root-right {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 100;
+      }
+      .control-panel {
+        width: 260px;
+        background: rgba(10, 10, 15, 0.45) !important;
+        backdrop-filter: blur(32px) saturate(120%) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(120%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6) !important;
+      }
+      .settings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin-top: 10px;
+      }
+      .setting-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: all 0.3s ease;
+      }
+      .setting-row.auto-active {
+        --row-color: #ff453a !important;
+      }
+      .setting-row.auto-active .auto-indicator {
+        color: #ff453a;
+        opacity: 1;
+        animation: breathe 2s infinite ease-in-out;
+      }
+      @keyframes breathe {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.3); opacity: 1; }
+      }
+      .setting-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+        user-select: none;
+      }
+      .setting-header:hover {
+        color: #fff;
+      }
+      .auto-indicator {
+        font-size: 8px;
+        color: var(--row-color);
+        opacity: 0.3;
+      }
+      .setting-label {
+        flex: 1;
+        text-transform: uppercase;
+      }
+      .slider-value {
+        font-family: monospace;
+        color: var(--row-color);
+        font-weight: 700;
+        min-width: 35px;
+        text-align: right;
+      }
+      .apple-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        outline: none;
+      }
+      .apple-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border: 2px solid var(--row-color);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .apple-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.3);
       }
     </style>
     <script type="importmap">
@@ -19,6 +232,145 @@
 		</script>
   </head>
   <body>
+    <div id="ui-root-left">
+      <div class="side-box">
+        <div class="box-header">
+          <h2>Cosmos Navigator</h2>
+        </div>
+        
+        <div class="category-header">Select Celestial Body</div>
+        <div class="geometry-list" id="planet-list">
+          <button class="geo-btn" data-planet="sun">
+            <span>Sun</span>
+            <span class="indicator">☀️</span>
+          </button>
+          <button class="geo-btn" data-planet="mercury">
+            <span>Mercury</span>
+            <span class="indicator">🪨</span>
+          </button>
+          <button class="geo-btn" data-planet="venus">
+            <span>Venus</span>
+            <span class="indicator">☁️</span>
+          </button>
+          <button class="geo-btn active" data-planet="earth">
+            <span>Earth</span>
+            <span class="indicator">🌍</span>
+          </button>
+          <button class="geo-btn" data-planet="moon">
+            <span>Moon</span>
+            <span class="indicator">🌑</span>
+          </button>
+          <button class="geo-btn" data-planet="mars">
+            <span>Mars</span>
+            <span class="indicator">🔴</span>
+          </button>
+          <button class="geo-btn" data-planet="jupiter">
+            <span>Jupiter</span>
+            <span class="indicator">🪐</span>
+          </button>
+          <button class="geo-btn" data-planet="saturn">
+            <span>Saturn</span>
+            <span class="indicator">🥯</span>
+          </button>
+          <button class="geo-btn" data-planet="uranus">
+            <span>Uranus</span>
+            <span class="indicator">💎</span>
+          </button>
+          <button class="geo-btn" data-planet="neptune">
+            <span>Neptune</span>
+            <span class="indicator">🌊</span>
+          </button>
+          <button class="geo-btn" data-planet="pluto">
+            <span>Pluto</span>
+            <span class="indicator">❄️</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ui-root-right">
+      <div class="side-box control-panel">
+        <div class="box-header">
+          <h2>Celestial Controls</h2>
+        </div>
+        
+        <div class="settings-list">
+          <div class="category-header">Simulation Settings</div>
+          <!-- Rotation -->
+          <div class="setting-row" style="--row-color: #0072ff;">
+            <div class="setting-header">
+              <label class="setting-label">Rotation Speed</label>
+              <span class="slider-value" id="val-earth">1.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-earth" min="0" max="10" step="0.1" value="1.0" />
+          </div>
+          <!-- Cloud Speed -->
+          <div class="setting-row" style="--row-color: #ffffff;">
+            <div class="setting-header">
+              <label class="setting-label">Cloud Speed</label>
+              <span class="slider-value" id="val-cloud">1.2</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-cloud" min="0" max="10" step="0.1" value="1.2" />
+          </div>
+          <!-- Cloud Opacity -->
+          <div class="setting-row" style="--row-color: #aaa;">
+            <div class="setting-header">
+              <label class="setting-label">Cloud Opacity</label>
+              <span class="slider-value" id="val-opacity">0.8</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-opacity" min="0" max="1.0" step="0.01" value="0.8" />
+          </div>
+          <!-- Star Rotation -->
+          <div class="setting-row" style="--row-color: #ffda00;">
+            <div class="setting-header">
+              <label class="setting-label">Star Drift</label>
+              <span class="slider-value" id="val-stars">1.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-stars" min="0" max="5" step="0.1" value="1.0" />
+          </div>
+
+          <div class="category-header">Solar Dynamics</div>
+          <!-- Sun Intensity -->
+          <div class="setting-row" id="row-intensity" style="--row-color: #ff9d00;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">Sun Intensity</label>
+              <span class="slider-value" id="val-intensity">2.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-intensity" min="0" max="5" step="0.1" value="2.0" />
+          </div>
+          
+          <div class="category-header">Light Orientation</div>
+          <!-- Sun X -->
+          <div class="setting-row" id="row-x" style="--row-color: #ff4dff;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">Orbit X</label>
+              <span class="slider-value" id="val-x">-2.0</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-x" min="-10" max="10" step="0.1" value="-2.0" />
+          </div>
+          <!-- Sun Y -->
+          <div class="setting-row" id="row-y" style="--row-color: #4dff4d;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">Orbit Y</label>
+              <span class="slider-value" id="val-y">0.5</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-y" min="-5" max="5" step="0.1" value="0.5" />
+          </div>
+          <!-- Sun Z -->
+          <div class="setting-row" id="row-z" style="--row-color: #4d4dff;">
+            <div class="setting-header">
+              <span class="auto-indicator">▶</span>
+              <label class="setting-label">Orbit Z</label>
+              <span class="slider-value" id="val-z">1.5</span>
+            </div>
+            <input type="range" class="apple-slider" id="slider-z" min="-10" max="10" step="0.1" value="1.5" />
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="index.js"></script>
   </body>
 </html>

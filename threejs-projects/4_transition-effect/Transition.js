@@ -1,15 +1,28 @@
 import * as THREE from "three";
 import { TWEEN } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/libs/tween.module.min.js";
 const transitionParams = {
-  // useTexture: true,
   transition: 0,
-  texture: 5,
+  texture: 0,
   cycle: true,
   animate: true,
-  // threshold: 0.3,
+  threshold: 0.1,
+  animDuration: 4500, // Default duration in ms
 };
 
 export function getTransition({ renderer, sceneA, sceneB }) {
+  // ... (geometry, material, loader logic same)
+  
+  let transitionTween;
+  const startTween = () => {
+    if (transitionTween) transitionTween.stop();
+    transitionTween = new TWEEN.Tween(transitionParams)
+      .to({ transition: 1 }, transitionParams.animDuration)
+      .repeat(Infinity)
+      .delay(1000)
+      .yoyo(true)
+      .start();
+  };
+  startTween();
 
   const scene = new THREE.Scene();
   const w = window.innerWidth;
@@ -91,6 +104,10 @@ export function getTransition({ renderer, sceneA, sceneB }) {
   let needsTextureChange = false;
 
   const render = (delta) => {
+    // Sync external params with material uniforms
+    material.uniforms.threshold.value = transitionParams.threshold;
+    material.uniforms.mixRatio.value = transitionParams.transition;
+
     // Transition animation
     if (transitionParams.animate) {
       TWEEN.update();
@@ -116,7 +133,8 @@ export function getTransition({ renderer, sceneA, sceneB }) {
       }
     }
 
-    material.uniforms.mixRatio.value = transitionParams.transition;
+    // Force manual texture update if not cycling
+    material.uniforms.tMixTexture.value = textures[transitionParams.texture % textures.length];
 
     // Prevent render both scenes when it's not necessary
     if (transitionParams.transition === 0) {
@@ -134,5 +152,5 @@ export function getTransition({ renderer, sceneA, sceneB }) {
       renderer.render(scene, camera);
     }
   };
-  return { render };
+  return { render, params: transitionParams, textures, startTween };
 }

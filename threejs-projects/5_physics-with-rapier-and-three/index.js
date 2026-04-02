@@ -50,8 +50,8 @@ const updateUI = () => {
   values[0].innerText = params.gravityY.toFixed(2);
   values[1].innerText = params.mouseBallRadius.toFixed(2);
   values[2].innerText = params.timeScale.toFixed(2);
-  values[3].innerText = params.glowIntensity.toFixed(2);
-  values[4].innerText = params.autoRotate > 0.5 ? "ON" : "OFF";
+  values[3].innerText = params.glowIntensity.toFixed(1);
+  values[4].innerText = params.autoRotate > 0.1 ? params.autoRotate.toFixed(2) : "OFF";
 };
 
 // --- Physics Logic ---
@@ -85,7 +85,12 @@ scene.add(points);
 
 // --- Event Listeners ---
 inputs[0].oninput = (e) => { params.gravityY = parseFloat(e.target.value); world.gravity.y = params.gravityY; updateUI(); };
-inputs[1].oninput = (e) => { params.mouseBallRadius = parseFloat(e.target.value); mouseBall.collider.setRadius(params.mouseBallRadius); mouseBall.mesh.scale.setScalar(params.mouseBallRadius / 0.75); updateUI(); };
+inputs[1].oninput = (e) => { 
+  params.mouseBallRadius = parseFloat(e.target.value); 
+  mouseBall.collider.setRadius(params.mouseBallRadius); 
+  mouseBall.mesh.scale.setScalar(params.mouseBallRadius / 0.75); // Ensure scale updates with radius
+  updateUI(); 
+};
 inputs[2].oninput = (e) => { params.timeScale = parseFloat(e.target.value); updateUI(); };
 inputs[3].oninput = (e) => { params.glowIntensity = parseFloat(e.target.value); updateUI(); };
 inputs[4].oninput = (e) => { params.autoRotate = parseFloat(e.target.value); updateUI(); };
@@ -174,16 +179,10 @@ function animate(t) {
       const elapsed = t - (autoModes[id].startTime || 0);
       const next = autoModes[id].base + Math.sin(elapsed * autoModes[id].speed) * autoModes[id].amp;
       
-      inputs[id-1].value = next;
-      params[Object.keys(params)[id-1]] = next; 
-      
-      // Sync specific logic per id
-      if (id === 1) world.gravity.y = next;
-      if (id === 2) { mouseBall.collider.setRadius(next); mouseBall.mesh.scale.setScalar(next / 0.75); }
-      if (id === 3) params.timeScale = next;
-      if (id === 4) params.glowIntensity = next;
-      if (id === 5) params.autoRotate = next;
-      updateUI();
+      const input = inputs[id-1];
+      input.value = next;
+      // Trigger the input event so that the listeners (oninput) can react to the change
+      input.dispatchEvent(new Event('input'));
     }
   });
 

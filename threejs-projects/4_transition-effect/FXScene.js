@@ -94,5 +94,5 @@ export function getFXScene({ renderer, material, clearColor, needsAnimatedColor 
     }
   };
 
-  return { fbo, render, update };
+  return { fbo, render, update, rotationSpeed };
 };

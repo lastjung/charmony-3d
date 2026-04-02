@@ -82,23 +82,51 @@ scene.add(stars);
 
 // 4. MASSIVE GPU INSTANCING (THE CORE)
 const instMeshGeo = new THREE.BoxGeometry(0.005, 0.005, 0.04);
-const instMeshMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.6 });
+const instMeshMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
 const instMesh = new THREE.InstancedMesh(instMeshGeo, instMeshMat, CONFIG.maxNodes);
+
+const instanceColors = new Float32Array(CONFIG.maxNodes * 3);
+instMesh.instanceColor = new THREE.InstancedBufferAttribute(instanceColors, 3);
 earthGroup.add(instMesh);
 
 const dummy = new THREE.Object3D();
-const nodeStates = []; // Track metadata for animation
+const nodeStates = []; 
+
+// HEATMAP DATA SAMPLING
+const heatCanvas = document.createElement('canvas');
+const heatCtx = heatCanvas.getContext('2d', { willReadFrequently: true });
+let heatmapReady = false;
+let heatData = null;
+
+const heatLoader = new THREE.TextureLoader();
+heatLoader.load("./textures/03_earthlights1k.jpg", (tex) => {
+  const img = tex.image;
+  heatCanvas.width = 512;
+  heatCanvas.height = 256;
+  heatCtx.drawImage(img, 0, 0, 512, 256);
+  heatData = heatCtx.getImageData(0, 0, 512, 256).data;
+  heatmapReady = true;
+});
+
+function getHeatValue(phi, theta) {
+  if (!heatmapReady) return 0;
+  // Convert spherical to UV
+  const u = 1 - (theta / (Math.PI * 2) + 0.5) % 1;
+  const v = phi / Math.PI;
+  const px = Math.floor(u * 511);
+  const py = Math.floor(v * 255);
+  const idx = (py * 512 + px) * 4;
+  return heatData[idx] / 255; // Brightness 0-1
+}
 
 function initInstancing(count) {
-  const radius = 1.51;
+  const radius = 1.5;
   instMesh.count = count;
   
-  // Initialize states for MAX allowed nodes to prevent undefined errors on slider change
   for (let i = 0; i < CONFIG.maxNodes; i++) {
     const phi = Math.acos(2 * Math.random() - 1);
     const theta = 2 * Math.PI * Math.random();
     
-    // Only set initial matrix for nodes within current density
     if (i < count) {
       dummy.position.set(
         radius * Math.sin(phi) * Math.cos(theta),
@@ -113,15 +141,38 @@ function initInstancing(count) {
     nodeStates.push({
       phi, theta, 
       speed: 0.001 + Math.random() * 0.002,
-      phase: Math.random() * Math.PI * 2
+      phase: Math.random() * Math.PI * 2,
+      initialHeat: 0 // Will populate in first animate pass
     });
   }
-  instMesh.instanceMatrix.needsUpdate = true;
 }
 
 initInstancing(CONFIG.currentDensity);
 
-// 5. UI INTERACTION
+// 5. UI & INTERACTION SYSTEM
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(-10, -10);
+const interactionPoint = new THREE.Vector3();
+let hasInteraction = false;
+
+const activeWaves = [];
+
+window.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+window.addEventListener('mousedown', () => {
+  if (hasInteraction) {
+    activeWaves.push({
+      origin: interactionPoint.clone(),
+      startTime: performance.now() / 1000,
+      duration: 3.5
+    });
+    if (activeWaves.length > 3) activeWaves.shift();
+  }
+});
+
 const ui = {
   density: { slider: document.getElementById('slider-density'), val: document.getElementById('val-density') },
   flow: { slider: document.getElementById('slider-flow'), val: document.getElementById('val-flow') },
@@ -162,18 +213,11 @@ function switchMode(idx) {
   ui.modeBtns.forEach(b => b.classList.remove('active'));
   ui.modeBtns[idx].classList.add('active');
 
-  // Change Visuals based on Mode
-  const colors = [0x00f5ff, 0xbf5af2, 0xff5e00, 0xffffff];
-  instMeshMat.color.setHex(colors[idx]);
-  
-  if (idx === 1) { // HEATMAP MODE
-    instMeshMat.opacity = 0.9;
-  } else {
-    instMeshMat.opacity = 0.6;
-  }
+  instMeshMat.color.setHex(0xffffff); 
+  if (idx === 1) instMeshMat.opacity = 0.9;
+  else instMeshMat.opacity = 0.6;
 }
 
-// S-Command Shortcut System
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit1') switchMode(0);
   if (e.code === 'Digit2') switchMode(1);
@@ -186,26 +230,48 @@ const timer = new THREE.Timer();
 let frames = 0;
 let lastTime = performance.now();
 
+const colorActive = new THREE.Color(0xffffff);
+const colorWave = new THREE.Color(0x00ff88);
+const colorBase = new THREE.Color();
+const colorHeat = new THREE.Color(0xff4400);
+
 function animate() {
   requestAnimationFrame(animate);
   timer.update();
   const time = timer.getElapsed();
   const dt = timer.getDelta();
 
-  // EARTH ROTATION
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObject(earthMesh);
+  if (intersects.length > 0) {
+    interactionPoint.copy(intersects[0].point);
+    hasInteraction = true;
+  } else {
+    hasInteraction = false;
+  }
+
+  const currentTime = performance.now() / 1000;
+  for (let i = activeWaves.length - 1; i >= 0; i--) {
+    if (currentTime > activeWaves[i].startTime + activeWaves[i].duration) {
+      activeWaves.splice(i, 1);
+    }
+  }
+
   earthGroup.rotation.y += 0.001;
   cloudsMesh.rotation.y += 0.0013;
   stars.rotation.y -= 0.0001;
 
-  // MASSIVE INSTANCE ANIMATION
-  const radius = 1.51;
+  const baseColors = [0x00f5ff, 0xbf5af2, 0xff5e00, 0xffffff];
+  colorBase.setHex(baseColors[currentModeIdx]);
+  const radius = 1.5;
+
   for (let i = 0; i < CONFIG.currentDensity; i++) {
     const s = nodeStates[i];
     
-    // Flow/Pulse Logic based on Mode
-    if (currentModeIdx === 0) { // DATA FLOW
+    // Flow/Pulse Logic
+    if (currentModeIdx === 0) { 
       s.theta += s.speed * CONFIG.flowVelocity;
-    } else if (currentModeIdx === 2) { // HEATMAP/PULSE
+    } else if (currentModeIdx === 2) { 
       const pulse = Math.sin(time * 3 + s.phase) * 0.01;
       s.phi += pulse * 0.1;
     }
@@ -215,18 +281,63 @@ function animate() {
     const z = radius * Math.cos(s.phi);
 
     dummy.position.set(x, y, z);
+    
+    // Sampling Heatmap (Only if needed to save CPU/Battery unless in certain modes, but let's do it simply)
+    if (s.initialHeat === 0 && heatmapReady) {
+      s.initialHeat = getHeatValue(s.phi, s.theta);
+    }
+
+    let finalScale = (currentModeIdx === 1) ? 2.5 : 1.0;
+    finalScale += Math.sin(time * 5 + s.phase) * 0.2;
+    
+    const worldPos = dummy.position.clone().applyMatrix4(earthGroup.matrixWorld);
+    let interactIntensity = 0;
+    let waveIntensity = 0;
+
+    if (hasInteraction) {
+      const distSq = worldPos.distanceToSquared(interactionPoint);
+      if (distSq < 0.25) interactIntensity = (0.25 - distSq) * 4;
+    }
+
+    for (const wave of activeWaves) {
+      const dist = worldPos.distanceTo(wave.origin);
+      const elapsed = currentTime - wave.startTime;
+      const waveRadius = elapsed * 1.5; 
+      const waveWidth = 0.4;
+      const waveDist = Math.abs(dist - waveRadius);
+      if (waveDist < waveWidth) {
+        const falloff = 1.0 - (waveDist / waveWidth);
+        const strength = falloff * (1.0 - elapsed / wave.duration);
+        waveIntensity += strength;
+      }
+    }
+
+    // HEATMAP TOPOGRAPHY
+    const heatImpact = (currentModeIdx === 2) ? s.initialHeat * 1.5 : s.initialHeat * 0.3;
+    const combinedPush = interactIntensity + waveIntensity * 3 + heatImpact;
+    
+    dummy.position.multiplyScalar(1 + combinedPush * 0.15);
+    finalScale *= (1 + combinedPush * 1.2);
+
+    if (waveIntensity > 0.1) instMesh.setColorAt(i, colorWave);
+    else if (interactIntensity > 0.1) instMesh.setColorAt(i, colorActive);
+    else if (currentModeIdx === 2 && s.initialHeat > 0.4) {
+      colorBase.lerp(colorHeat, s.initialHeat);
+      instMesh.setColorAt(i, colorBase);
+      colorBase.setHex(baseColors[currentModeIdx]); // Reset for next node
+    } else {
+      instMesh.setColorAt(i, colorBase);
+    }
+
+    dummy.scale.setScalar(finalScale);
     dummy.lookAt(0, 0, 0); 
-    
-    // Dynamic Scale
-    const scale = (currentModeIdx === 1) ? 2.5 : 1.0;
-    dummy.scale.setScalar(scale + Math.sin(time * 5 + s.phase) * 0.2);
-    
     dummy.updateMatrix();
     instMesh.setMatrixAt(i, dummy.matrix);
   }
+  
   instMesh.instanceMatrix.needsUpdate = true;
+  instMesh.instanceColor.needsUpdate = true;
 
-  // FPS COUNTER
   frames++;
   const now = performance.now();
   if (now > lastTime + 1000) {

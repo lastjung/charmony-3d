@@ -121,8 +121,23 @@ const PLANETS = {
 
 let currentPlanetKey = 'earth';
 
-// 4. TRANSITION LOGIC
+// 4. WARP & TRANSITION LOGIC
+let isWarping = false;
+let warpProgress = 0;
+let warpTargetPlanet = null;
+const WARP_DURATION = 2.0; // Seconds
+
 function updatePlanet(name) {
+  if (isWarping || name === currentPlanetKey) return;
+  
+  // Start Warp Sequence
+  isWarping = true;
+  warpProgress = 0;
+  warpTargetPlanet = name;
+  controls.enabled = false; // Lock controls during jump
+}
+
+function applyPlanetTextures(name) {
   const data = PLANETS[name];
   if (!data) return;
   currentPlanetKey = name;
@@ -161,7 +176,6 @@ function updatePlanet(name) {
     material.emissiveIntensity = 4.0;
     sunHalo.visible = true;
   } else {
-    // BLUE BAND: ONLY for Earth
     if (name === 'earth') {
       glowMesh.visible = true;
       fresnelMat.uniforms.color1.value.setHex(0x4488ff);
@@ -181,7 +195,6 @@ function updatePlanet(name) {
     }
   }
 
-  // Earth Extras
   if (data.lights) { lightsMesh.visible = true; lightsMat.map = loader.load(data.lights); }
   if (data.clouds) {
     cloudsMesh.visible = true;
@@ -213,6 +226,7 @@ const ui = {
 // Navigation
 ui.planetButtons.forEach(btn => {
   btn.addEventListener('click', () => {
+    if (isWarping) return;
     document.querySelector('.geo-btn.active')?.classList.remove('active');
     btn.classList.add('active');
     updatePlanet(btn.dataset.planet);
@@ -256,13 +270,51 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 function animate() {
   requestAnimationFrame(animate);
+  const dt = 0.016;
   const baseRot = 0.002 * settings.earthSpeed;
   
+  // Warp logic
+  let warpFactor = 1.0;
+  if (isWarping) {
+    warpProgress += dt / WARP_DURATION;
+    if (warpProgress >= 1) {
+      warpProgress = 1;
+      isWarping = false;
+      controls.enabled = true;
+    }
+
+    // Cinematic Curve: Symmetric ease-in/out
+    const t = Math.sin(warpProgress * Math.PI); // 0 -> 1 -> 0 peak at 0.5
+    
+    // 1. FOV Stretch
+    camera.fov = 75 + t * 40;
+    camera.updateProjectionMatrix();
+
+    // 2. Star Speed Increase
+    warpFactor = 1.0 + t * 50;
+
+    // 3. Planet Fly-away
+    earthGroup.position.z = -t * 15;
+    earthGroup.scale.setScalar(1.0 - t * 0.9);
+
+    // 4. Texture Swap at the Peak (0.5)
+    if (warpProgress >= 0.5 && warpTargetPlanet) {
+      applyPlanetTextures(warpTargetPlanet);
+      warpTargetPlanet = null;
+    }
+  } else {
+    // Return to normal foam
+    camera.fov = lerp(camera.fov, 75, 0.1);
+    camera.updateProjectionMatrix();
+    earthGroup.position.z = lerp(earthGroup.position.z, 0, 0.1);
+    earthGroup.scale.setScalar(lerp(earthGroup.scale.x, 1.0, 0.1));
+  }
+
   earthMesh.rotation.y += baseRot;
   lightsMesh.rotation.y += baseRot;
   cloudsMesh.rotation.y += 0.0023 * settings.cloudSpeed;
   glowMesh.rotation.y += baseRot;
-  stars.rotation.y -= 0.0002 * settings.starDrift;
+  stars.rotation.y -= 0.0002 * settings.starDrift * warpFactor;
 
   if (ringMesh.visible) ringMesh.rotation.z += baseRot * 0.5;
 
@@ -275,7 +327,6 @@ function animate() {
   }
 
   // Auto Lighting
-  const dt = 0.016;
   if (autoStates.intensity) {
     autoProgress.intensity += dt;
     sunLight.intensity = lerp(sunLight.intensity, 2.5 + Math.sin(autoProgress.intensity * 2) * 1.5, 0.1);
@@ -295,7 +346,7 @@ function animate() {
 }
 
 animate();
-updatePlanet('earth');
+applyPlanetTextures('earth');
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;

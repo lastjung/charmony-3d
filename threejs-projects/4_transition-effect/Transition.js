@@ -95,13 +95,13 @@ export function getTransition({ renderer, sceneA, sceneB }) {
   material.uniforms.tDiffuse1.value = sceneA.fbo.texture;
   material.uniforms.tDiffuse2.value = sceneB.fbo.texture;
 
+  let needsTextureChange = false;
   new TWEEN.Tween(transitionParams)
     .to({ transition: 1 }, 4500)
     .repeat(Infinity)
     .delay(2000)
     .yoyo(true)
     .start();
-  let needsTextureChange = false;
 
   const render = (delta) => {
     // Sync external params with material uniforms

@@ -27,7 +27,7 @@ const updateUI = () => {
   if (!transition) return;
   values[0].innerText = transition.params.transition.toFixed(2);
   values[1].innerText = transition.params.threshold.toFixed(2);
-  values[2].innerText = transition.params.animate ? "RUN" : "PAUSE";
+  values[2].innerText = (4500 / transition.params.animDuration).toFixed(2);
   // Show rotation speed for Row 4
   values[3].innerText = sceneA.rotationSpeed ? sceneA.rotationSpeed.x.toFixed(2) : "0.00";
   values[4].innerText = transition.params.texture;
@@ -165,10 +165,11 @@ function animate(t) {
   }
 
   // Handle Rotation Mapping (Lerp start/stop based on play state)
-  const rotTarget = (transition && transition.params.animate) ? 1.0 : 0.0;
+  const userSpeed = parseFloat(inputs[3].value) || 0;
+  const rotTarget = (transition && transition.params.animate) ? userSpeed : 0.0;
   if (sceneA.rotationSpeed) {
     const currentRot = sceneA.rotationSpeed.x;
-    const targetSpeed = lerp(currentRot, rotTarget, 0.05); // Smooth acceleration
+    const targetSpeed = lerp(currentRot, rotTarget, 0.05); // Smooth acceleration/deceleration
     sceneA.rotationSpeed.set(targetSpeed, -targetSpeed * 2, targetSpeed * 1.5);
     sceneB.rotationSpeed.set(targetSpeed, -targetSpeed * 2, targetSpeed * 1.5);
   }
@@ -184,6 +185,7 @@ function animate(t) {
     }
   });
 
+  updateUI();
   transition.render(delta);
 }
 

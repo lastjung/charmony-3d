@@ -59,7 +59,7 @@ function getGeometry(size) {
 }
     
 function getBody(RAPIER, world) {
-  const size = 0.5; // 0.1 + Math.random() * 0.25;
+  const size = 0.5;
   const range = 12;
   const density = size * 1.0;
   let x = Math.random() * range - range * 0.5;
@@ -71,7 +71,6 @@ function getBody(RAPIER, world) {
   const prob = Math.random();
   const options = prob < 0.33 ? {
     color,
-    // flatShading: true,
     metalness: 1,
     roughness: 0.1,
   } : prob < 0.66 ? {
@@ -83,8 +82,6 @@ function getBody(RAPIER, world) {
     color,
     emissive: color,
     emissiveIntensity: 0.5,
-    // wireframe: true,
-    // flatShading: true,
     metalness: 0.0,
     roughness: 0.5,
   };
@@ -94,25 +91,35 @@ function getBody(RAPIER, world) {
   // physics
   let rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(x, y, z)
-    // .setLinearDamping(1)
-    // .setAngularDamping(1);
+    .setLinearDamping(0.5) // Add air resistance
+    .setAngularDamping(0.5);
+    
   let rigid = world.createRigidBody(rigidBodyDesc);
   let points = geometry.attributes.position.array;
   let colliderDesc = RAPIER.ColliderDesc.convexHull(points).setDensity(density);
-  world.createCollider(colliderDesc, rigid);
+  let collider = world.createCollider(colliderDesc, rigid);
+
+  // Store initial state for reset
+  const initialTranslation = { x, y, z };
+  const initialRotation = rigid.rotation();
 
   function update() {
     rigid.resetForces(true);
     let { x, y, z } = rigid.translation();
     let pos = new THREE.Vector3(x, y, z);
-    let dir = pos.clone().sub(sceneMiddle).normalize();
+    
+    // Spring-like return force to center (0,0,0)
+    // Strength increases with distance from center
+    let pursuitForce = pos.clone().multiplyScalar(-0.12);
+    
     let q = rigid.rotation();
     let rote = new THREE.Quaternion(q.x, q.y, q.z, q.w);
     mesh.rotation.setFromQuaternion(rote);
-    rigid.addForce(dir.multiplyScalar(-0.5), true);
+    
+    rigid.addForce(pursuitForce, true);
     mesh.position.set(x, y, z);
   }
-  return { mesh, rigid, update };
+  return { mesh, rigid, update, initialTranslation, initialRotation };
 }
 
 function getMouseBall(RAPIER, world) {
@@ -127,13 +134,13 @@ function getMouseBall(RAPIER, world) {
   let bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 0, 0)
   let mouseRigid = world.createRigidBody(bodyDesc);
   let dynamicCollider = RAPIER.ColliderDesc.ball(mouseSize * 3.0);
-  world.createCollider(dynamicCollider, mouseRigid);
+  let collider = world.createCollider(dynamicCollider, mouseRigid);
   function update(mousePos) {
     mouseRigid.setTranslation({ x: mousePos.x, y: mousePos.y, z: mousePos.z });
     let { x, y, z } = mouseRigid.translation();
     mouseMesh.position.set(x, y, z);
   }
-  return { mesh: mouseMesh, update };
+  return { mesh: mouseMesh, update, rigid: mouseRigid, collider };
 }
 
 export { getBody, getMouseBall };

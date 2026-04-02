@@ -4,12 +4,12 @@ import RAPIER from 'rapier';
 import { UltraHDRLoader } from 'jsm/loaders/UltraHDRLoader.js';
 import { OrbitControls } from 'jsm/controls/OrbitControls.js';
 import getLayer from "./getLayer.js";
+
 const w = window.innerWidth;
 const h = window.innerHeight;
 const scene = new THREE.Scene();
-// scene.backgroundBlurriness = 0.1;
 const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
-camera.position.z = 5;
+camera.position.set(0, 0, 8);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(w, h);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -19,16 +19,44 @@ document.body.appendChild(renderer.domElement);
 const ctrls = new OrbitControls(camera, renderer.domElement);
 ctrls.enableDamping = true;
 
-const hdrLoader = new UltraHDRLoader();
-hdrLoader.load('envs/san_giuseppe_bridge_2k.jpg', (hdr) => {
-  hdr.mapping = THREE.EquirectangularReflectionMapping;
-  // scene.background = hdr;
-  scene.environment = hdr;
-});
+// --- Premium UI & State ---
+const params = {
+  gravityY: 0.0,
+  mouseBallRadius: 0.75,
+  timeScale: 1.0,
+  glowIntensity: 0.2,
+  autoRotate: 0.0,
+  showDebug: false,
+};
 
+const autoModes = {
+  1: { active: false, base: 0, amp: 10, speed: 0.0005 },  // Gravity Y (Very slow)
+  2: { active: false, base: 1.5, amp: 1.4, speed: 0.0008 }, // Radius
+  3: { active: false, base: 1.0, amp: 0.9, speed: 0.001 },  // Time Scale
+  4: { active: false, base: 5, amp: 4.8, speed: 0.0012 }, // Glow
+  5: { active: false, base: 0.5, amp: 0.5, speed: 0.0006 }  // Auto Rotate
+};
+
+// UI Elements
+const sidebar = document.getElementById('sidebar');
+const grip = document.getElementById('sidebar-grip');
+const inputs = [1, 2, 3, 4, 5].map(id => document.getElementById(`input-${id}`));
+const values = [1, 2, 3, 4, 5].map(id => document.getElementById(`val-${id}`));
+const indicators = [1, 2, 3, 4, 5].map(id => document.getElementById(`ind-${id}`));
+const rows = [1, 2, 3, 4, 5].map(id => document.getElementById(`row-${id}`));
+
+// Initialize UI Values
+const updateUI = () => {
+  values[0].innerText = params.gravityY.toFixed(2);
+  values[1].innerText = params.mouseBallRadius.toFixed(2);
+  values[2].innerText = params.timeScale.toFixed(2);
+  values[3].innerText = params.glowIntensity.toFixed(2);
+  values[4].innerText = params.autoRotate > 0.5 ? "ON" : "OFF";
+};
+
+// --- Physics Logic ---
 await RAPIER.init();
-const gravity = { x: 0.0, y: 0, z: 0.0 };
-const world = new RAPIER.World(gravity);
+const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
 
 const numBodies = 100;
 const bodies = [];
@@ -37,99 +65,168 @@ for (let i = 0; i < numBodies; i++) {
   bodies.push(body);
   scene.add(body.mesh);
 }
-
 const mouseBall = getMouseBall(RAPIER, world);
 scene.add(mouseBall.mesh);
 
-const hemiLight = new THREE.HemisphereLight(0x00bbff, 0xaa00ff);
-hemiLight.intensity = 0.2;
-scene.add(hemiLight);
-
-// Sprites BG
-const gradientBackground = getLayer({
-  hue: 0.6,
-  numSprites: 8,
-  opacity: 0.2,
-  radius: 10,
-  size: 24,
-  z: -10.5,
+// --- HDR & Environment ---
+const hdrLoader = new UltraHDRLoader();
+hdrLoader.load('envs/san_giuseppe_bridge_2k.jpg', (hdr) => {
+  hdr.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = hdr;
 });
-scene.add(gradientBackground);
+
+const hemiLight = new THREE.HemisphereLight(0x00bbff, 0xaa00ff, 0.2);
+scene.add(hemiLight);
+scene.add(getLayer({ hue: 0.6, numSprites: 8, opacity: 0.2, radius: 10, size: 24, z: -10.5 }));
 
 const pointsGeo = new THREE.BufferGeometry();
-const pointsMat = new THREE.PointsMaterial({ 
-  size: 0.035, 
-  vertexColors: true
-});
-const points = new THREE.Points(pointsGeo, pointsMat);
+const points = new THREE.Points(pointsGeo, new THREE.PointsMaterial({ size: 0.035, vertexColors: true }));
 scene.add(points);
 
-function renderDebugView() {
-  const { vertices, colors } = world.debugRender();
-  pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  pointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-}
+// --- Event Listeners ---
+inputs[0].oninput = (e) => { params.gravityY = parseFloat(e.target.value); world.gravity.y = params.gravityY; updateUI(); };
+inputs[1].oninput = (e) => { params.mouseBallRadius = parseFloat(e.target.value); mouseBall.collider.setRadius(params.mouseBallRadius); mouseBall.mesh.scale.setScalar(params.mouseBallRadius / 0.75); updateUI(); };
+inputs[2].oninput = (e) => { params.timeScale = parseFloat(e.target.value); updateUI(); };
+inputs[3].oninput = (e) => { params.glowIntensity = parseFloat(e.target.value); updateUI(); };
+inputs[4].oninput = (e) => { params.autoRotate = parseFloat(e.target.value); updateUI(); };
 
-// Mouse Interactivity
-const raycaster = new THREE.Raycaster();
-const pointerPos = new THREE.Vector2(0, 0);
-const mousePos = new THREE.Vector3(0, 0, 0);
+document.getElementById('btn-debug').onclick = () => { params.showDebug = !params.showDebug; points.visible = params.showDebug; };
+document.getElementById('btn-explode').onclick = () => {
+  bodies.forEach(b => {
+    const p = b.rigid.translation();
+    const f = new THREE.Vector3(p.x, p.y, p.z).normalize().multiplyScalar(3.0);
+    b.rigid.applyImpulse({ x: f.x, y: f.y, z: f.z }, true);
+  });
+};
+document.getElementById('btn-reset').onclick = () => {
+  bodies.forEach(b => { b.rigid.setTranslation(b.initialTranslation, true); b.rigid.setRotation(b.initialRotation, true); b.rigid.setLinvel({x:0,y:0,z:0}, true); b.rigid.setAngvel({x:0,y:0,z:0}, true); });
+  params.gravityY = 0; world.gravity.y = 0; inputs[0].value = 0;
+  params.mouseBallRadius = 0.75; mouseBall.collider.setRadius(0.75); mouseBall.mesh.scale.setScalar(1.0); inputs[1].value = 0.75;
+  params.timeScale = 1.0; inputs[2].value = 1.0;
+  params.glowIntensity = 0.2; inputs[3].value = 0.2;
+  params.autoRotate = 0; inputs[4].value = 0;
+  [1, 2, 3, 4, 5].forEach(id => { autoModes[id].active = false; rows[id-1].classList.remove('auto-active'); indicators[id-1].innerText = "▶"; });
+  camera.position.set(0, 0, 8); ctrls.target.set(0, 0, 0); ctrls.update(); updateUI();
+};
 
-const mousePlaneGeo = new THREE.PlaneGeometry(48, 48, 48, 48);
-const mousePlaneMat = new THREE.MeshBasicMaterial({
-  wireframe: true,
-  color: 0x00ff00,
-  transparent: true,
-  opacity: 0.0
+// --- Drag & Shortcuts ---
+let startX, startY, isDragging = false;
+grip.onmousedown = (e) => { isDragging = true; startX = e.clientX - sidebar.offsetLeft; startY = e.clientY - sidebar.offsetTop; sidebar.style.transition = 'none'; };
+window.onmousemove = (e) => { if (!isDragging) return; sidebar.style.left = (e.clientX - startX) + 'px'; sidebar.style.top = (e.clientY - startY) + 'px'; sidebar.style.right = 'auto'; };
+window.onmouseup = () => { isDragging = false; sidebar.style.transition = 'transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s'; };
+
+let sHeld = false;
+// --- Auto Mode Toggle Logic ---
+const toggleAutoMode = (id) => {
+  if (autoModes[id]) {
+    const isActive = !autoModes[id].active;
+    autoModes[id].active = isActive;
+    
+    if (isActive) {
+      // Set current position as the base for the new oscillation
+      autoModes[id].base = parseFloat(inputs[id - 1].value);
+      autoModes[id].startTime = performance.now();
+    }
+    
+    rows[id - 1].classList.toggle('auto-active', isActive);
+    indicators[id - 1].innerText = isActive ? "||" : "▶";
+  }
+};
+
+// Bind Click Events to Rows
+rows.forEach((row, index) => {
+  const header = row.querySelector('.setting-header');
+  header.style.cursor = 'pointer';
+  header.onclick = () => {
+    toggleAutoMode(index + 1);
+    updateUI();
+  };
 });
-const mousePlane = new THREE.Mesh(mousePlaneGeo, mousePlaneMat);
-mousePlane.position.set(0, 0, 0.2);
+
+window.onkeydown = (e) => {
+  if (e.code === 'KeyS') sHeld = true;
+  if (sHeld && e.code.startsWith('Digit')) {
+    const id = parseInt(e.code.replace('Digit', ''));
+    if (autoModes[id]) {
+      toggleAutoMode(id);
+      updateUI();
+      e.preventDefault();
+    }
+  }
+};
+window.onkeyup = (e) => { if (e.code === 'KeyS') sHeld = false; };
+
+// --- Main Loop ---
+const raycaster = new THREE.Raycaster();
+const pointerPos = new THREE.Vector2();
+const mousePos = new THREE.Vector3();
+const mousePlane = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ visible: false }));
 scene.add(mousePlane);
 
+window.addEventListener('mousemove', (e) => { pointerPos.set((e.clientX / w) * 2 - 1, -(e.clientY / h) * 2 + 1); });
 
-window.addEventListener('mousemove', (evt) => {
-  pointerPos.set(
-    (evt.clientX / window.innerWidth) * 2 - 1,
-    -(evt.clientY / window.innerHeight) * 2 + 1
-  );
-});
-
-let cameraDirection = new THREE.Vector3();
-function handleRaycast() {
-  // orient the mouse plane to the camera
-  camera.getWorldDirection(cameraDirection);
-  cameraDirection.multiplyScalar(-1);
-  mousePlane.lookAt(cameraDirection);
-
-  raycaster.setFromCamera(pointerPos, camera);
-  const intersects = raycaster.intersectObjects(
-    [mousePlane],
-    false
-  );
-  if (intersects.length > 0) {
-    mousePos.copy(intersects[0].point);
-  }
-}
-
-function animate() {
+function animate(t) {
   requestAnimationFrame(animate);
+  
+  // 1. Auto Mode Logic (Dynamic Base Start)
+  [1, 2, 3, 4, 5].forEach(id => {
+    if (autoModes[id].active) {
+      const elapsed = t - (autoModes[id].startTime || 0);
+      const next = autoModes[id].base + Math.sin(elapsed * autoModes[id].speed) * autoModes[id].amp;
+      
+      inputs[id-1].value = next;
+      params[Object.keys(params)[id-1]] = next; 
+      
+      // Sync specific logic per id
+      if (id === 1) world.gravity.y = next;
+      if (id === 2) { mouseBall.collider.setRadius(next); mouseBall.mesh.scale.setScalar(next / 0.75); }
+      if (id === 3) params.timeScale = next;
+      if (id === 4) params.glowIntensity = next;
+      if (id === 5) params.autoRotate = next;
+      updateUI();
+    }
+  });
+
+  // 2. Physics Step
+  world.timestep = params.timeScale * (1/60);
   world.step();
-  handleRaycast();
+
+  // 3. Interactions
+  mousePlane.lookAt(camera.position);
+  raycaster.setFromCamera(pointerPos, camera);
+  const hits = raycaster.intersectObject(mousePlane);
+  if (hits.length > 0) mousePos.copy(hits[0].point);
   mouseBall.update(mousePos);
+
+  // 4. Update Visuals
+  bodies.forEach(b => {
+    b.update();
+    b.mesh.material.emissiveIntensity = params.glowIntensity;
+  });
+  
+  if (params.showDebug) {
+    const { vertices, colors } = world.debugRender();
+    pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    pointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  }
+
+  if (params.autoRotate > 0.01) {
+    scene.rotation.y += params.autoRotate * 0.01;
+  }
+
   ctrls.update();
-  // renderDebugView();
-  bodies.forEach(b => b.update());
   renderer.render(scene, camera);
 }
 
-animate();
+updateUI();
+animate(0);
 
-function handleWindowResize () {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-window.addEventListener('resize', handleWindowResize, false);
+window.addEventListener('resize', () => { 
+  camera.aspect = window.innerWidth / window.innerHeight; 
+  camera.updateProjectionMatrix(); 
+  renderer.setSize(window.innerWidth, window.innerHeight); 
+});
+
 
 
 

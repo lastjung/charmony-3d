@@ -31,12 +31,12 @@
         --theme-7-lime: #32d74b;
       }
 
-      /* Game Side Box - Slim Premium Sidebar */
+      /* Game Side Box - Ultra Slim Premium Sidebar */
       .controls-sidebar {
         position: fixed;
         top: 25px;
         right: 25px;
-        width: 250px;
+        width: 240px;
         background: var(--apple-glass-bg);
         backdrop-filter: var(--apple-glass-blur);
         -webkit-backdrop-filter: var(--apple-glass-blur);
@@ -44,27 +44,27 @@
         border-radius: 36px;
         padding: 24px;
         color: white;
-        box-shadow: 0 50px 150px rgba(0, 0, 0, 0.8);
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8);
         user-select: none;
         z-index: 1000;
       }
 
       .sidebar-grip {
-        width: 44px;
-        height: 5px;
-        background: rgba(255, 255, 255, 0.2);
+        width: 40px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
         border-radius: 10px;
         margin: -8px auto 22px;
         cursor: grab;
       }
 
       .sidebar-header {
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 800;
-        letter-spacing: 0.25em;
+        letter-spacing: 0.28em;
         text-align: center;
         color: var(--ui-text-muted);
-        margin-bottom: 28px;
+        margin-bottom: 32px;
         text-transform: uppercase;
       }
 
@@ -73,45 +73,42 @@
       .setting-header { 
         display: flex; 
         align-items: center; 
-        font-size: 11px; 
-        margin-bottom: 14px; 
+        font-size: 10.5px; 
+        margin-bottom: 15px; 
         color: var(--row-color); 
         cursor: pointer; 
         font-weight: 800;
-        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       }
       
       .auto-indicator { 
         font-size: 8px; 
         width: 14px; 
         height: 14px; 
-        background: rgba(255,255,255,0.1); 
+        background: rgba(255,255,255,0.08); 
         border-radius: 50%; 
         display: flex; 
         align-items: center; 
         justify-content: center; 
         margin-right: 15px; 
-        font-weight: 900; 
       }
       
-      .setting-label { flex-grow: 1; letter-spacing: 0.05em; }
+      .setting-label { flex-grow: 1; letter-spacing: 0.08em; }
       .slider-value { 
         font-weight: 900; 
         font-variant-numeric: tabular-nums; 
         color: var(--ui-text-bright); 
-        font-size: 11px; 
-        background: rgba(255,255,255,0.06); 
+        font-size: 10px; 
+        background: rgba(255,255,255,0.05); 
         padding: 2px 10px; 
         border-radius: 20px; 
       }
 
-      /* Refined Slider Dot (Ultra Slim) */
       .apple-slider { 
         -webkit-appearance: none; 
         appearance: none; 
         width: 100%; 
-        height: 4px; 
-        background: rgba(255, 255, 255, 0.1); 
+        height: 3px; 
+        background: rgba(255, 255, 255, 0.08); 
         border-radius: 10px; 
         outline: none; 
       }
@@ -119,46 +116,28 @@
       .apple-slider::-webkit-slider-thumb { 
         -webkit-appearance: none; 
         appearance: none; 
-        width: 14px; 
-        height: 14px; 
+        width: 13px; 
+        height: 13px; 
         background: #ffffff; 
-        border: 4.5px solid var(--row-color); 
+        border: 4px solid var(--row-color); 
         border-radius: 50%; 
         cursor: pointer; 
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); 
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); 
         transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .apple-slider::-webkit-slider-thumb:hover { width: 17px; height: 17px; box-shadow: 0 0 12px var(--row-color); }
+      .apple-slider::-webkit-slider-thumb:hover { width: 16px; height: 16px; transform: scale(1.1); }
 
       .setting-row.auto-active { --row-color: var(--apple-accent-red) !important; }
       .setting-row.auto-active .auto-indicator { background: var(--apple-accent-red); color: white; }
-      .setting-row.auto-active .setting-header { animation: system-override 1.5s infinite ease-in-out; }
-      @keyframes system-override { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-
-      .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 25px; }
-      .apple-btn { 
-        background: rgba(255, 255, 255, 0.1); 
-        border: 1px solid rgba(255, 255, 255, 0.12); 
-        border-radius: 18px; 
-        padding: 15px; 
-        color: white; 
-        font-size: 10px; 
-        font-weight: 800; 
-        cursor: pointer; 
-        transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
-        text-transform: uppercase; 
-        letter-spacing: 0.12em; 
-      }
-      .apple-btn:hover { background: rgba(255, 255, 255, 0.22); transform: translateY(-3px); }
-      .apple-btn.full { grid-column: span 2; background: rgba(0, 122, 255, 0.35); color: #64d2ff; }
+      .setting-row.auto-active .setting-header { animation: system-override 2s infinite ease-in-out; }
       
-      /* Game Play Box - Symmetry 180px */
+      /* Game Play Box - Refined Symmetry */
       .apple-player {
         position: fixed;
         bottom: 40px;
         left: 50%;
         transform: translateX(-50%);
-        width: 820px;
+        width: 860px;
         height: 64px;
         background: var(--apple-glass-bg);
         backdrop-filter: var(--apple-glass-blur);
@@ -167,7 +146,7 @@
         border-radius: 40px;
         display: flex;
         align-items: center;
-        padding: 0 32px;
+        padding: 0 35px;
         color: white;
         box-shadow: 0 30px 100px rgba(0, 0, 0, 0.8);
         z-index: 1000;
@@ -179,7 +158,7 @@
       .volume-btn { 
         background: none; 
         border: none; 
-        font-size: 18px; /* Size for Symbol */
+        font-size: 18px; 
         color: #64d2ff; 
         cursor: pointer; 
         padding: 4px; 
@@ -194,7 +173,7 @@
       .volume-btn:hover { opacity: 1; transform: scale(1.1); background: rgba(255,255,255,0.1); }
       .volume-btn.muted { color: var(--apple-accent-red); filter: drop-shadow(0 0 8px rgba(255,69,58,0.4)); }
 
-      .playback-group { display: flex; align-items: center; gap: 24px; position: absolute; left: 50%; transform: translateX(-50%); }
+      .playback-group { display: flex; align-items: center; gap: 28px; position: absolute; left: 50%; transform: translateX(-50%); }
       .extra-group { display: flex; align-items: center; gap: 18px; width: 180px; justify-content: flex-end; }
 
       .player-btn-mini { 
@@ -202,12 +181,12 @@
         border: none; 
         color: white; 
         cursor: pointer; 
-        width: 34px; 
-        height: 34px; 
+        width: 36px; 
+        height: 36px; 
         border-radius: 50%; 
         opacity: 0.6; 
         transition: 0.25s; 
-        font-size: 16px; 
+        font-size: 17px; /* Increased for symbols */
         font-weight: 800; 
         display: flex; 
         align-items: center; 
@@ -215,7 +194,6 @@
       }
       .player-btn-mini:hover { opacity: 1; transform: scale(1.15); background: rgba(255,255,255,0.1); }
       
-      /* Main Play/Pause Geometry */
       .player-btn-main { 
         background: white; 
         border: none; 
@@ -248,10 +226,10 @@
     </script>
   </head>
   <body>
-    <!-- Game Side Box -->
+    <!-- Game Side Box - Ultra Slim -->
     <div class="controls-sidebar" id="sidebar">
       <div class="sidebar-grip" id="sidebar-grip"></div>
-      <div class="sidebar-header">WORMHOLE EXPLORER PRO</div>
+      <div class="sidebar-header">WORMHOLE EXPLORER</div>
 
       <div class="setting-row" id="row-1" style="--row-color: var(--theme-1-rainbow);">
         <div class="setting-header">
@@ -315,32 +293,28 @@
         </div>
         <input type="range" class="apple-slider" id="input-7" min="1" max="100" step="1" value="30">
       </div>
-
-      <div class="action-buttons">
-        <button class="apple-btn" id="btn-pause">PAUSE ENGINE</button>
-        <button class="apple-btn full" id="btn-reset">HARD RESET CORE</button>
-      </div>
     </div>
 
-    <!-- Game Play Box - Refined Symbol UI -->
+    <!-- Game Play Box - Updated Symbols -->
     <div class="apple-player" id="apple-player">
       <div class="player-row">
-        <!-- 좌측 볼륨 그룹 (180px) -->
+        <!-- 좌측: 볼륨 그룹 (180px) -->
         <div class="volume-group">
           <button class="volume-btn" id="volume-toggle">🔊</button>
           <input type="range" class="timeline-slider" id="volume-slider" min="0" max="1" step="0.01" value="0.6" style="width: 100px;">
-        </div>
-
-        <!-- 중앙 제어 그룹 (대칭) -->
-        <div class="playback-group">
-          <button class="player-btn-mini" id="player-reset">↩</button>
-          <button class="player-btn-mini" id="player-speed-down">«</button>
-          <button class="player-btn-main" id="player-play">▶</button>
-          <button class="player-btn-mini" id="player-speed-up">»</button>
           <button class="player-btn-mini" id="player-fullscreen">⛶</button>
         </div>
 
-        <!-- 우측 정보 그룹 (180px) -->
+        <!-- 중앙: 컨트롤 (Symmetry) -->
+        <div class="playback-group">
+          <button class="player-btn-mini" id="player-partial-reset">⏮</button>
+          <button class="player-btn-mini" id="player-speed-down">«</button>
+          <button class="player-btn-main" id="player-play">▶</button>
+          <button class="player-btn-mini" id="player-speed-up">»</button>
+          <button class="player-btn-mini" id="player-full-reset">⟲</button>
+        </div>
+
+        <!-- 우측: 정보 및 타임라인 (180px) -->
         <div class="extra-group">
           <span class="time-label" id="time-current">0:00</span>
           <input type="range" class="timeline-slider" id="player-timeline" min="0" max="1" step="0.001" value="0">

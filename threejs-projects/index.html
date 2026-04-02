@@ -16,6 +16,7 @@
             --accent-cyan: #06b6d4;
             --accent-amber: #f59e0b;
             --accent-rose: #f43f5e;
+            --accent-emerald: #10b981;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --transition: cubic-bezier(0.4, 0, 0.2, 1);
@@ -181,6 +182,7 @@
         .card.p3 { --accent-color: var(--accent-purple); }
         .card.p4 { --accent-color: var(--accent-amber); }
         .card.p5 { --accent-color: var(--accent-rose); }
+        .card.p6 { --accent-color: var(--accent-emerald); }
 
         .glow {
             position: absolute;
@@ -210,7 +212,7 @@
     <div class="container">
         <header>
             <h1>Three.js Projects</h1>
-            <p>5 Dazzling Real-time 3D Animations</p>
+            <p>6 Dazzling Real-time 3D Animations</p>
         </header>
 
         <div class="grid">
@@ -273,6 +275,19 @@
                     <div class="card-num">PROJECT 05</div>
                     <div class="card-title">Rapier Physics</div>
                     <p class="card-desc">Integrating high-performance physics engines with Three.js for interactive collisions.</p>
+                </div>
+                <div class="card-action">
+                    Launch Experience <span class="arrow">→</span>
+                </div>
+            </a>
+
+            <!-- Project 6 -->
+            <a href="./6_massive-gpu-instancing/index.html" class="card p6">
+                <div class="glow"></div>
+                <div>
+                    <div class="card-num">PROJECT 06</div>
+                    <div class="card-title">Massive GPU Instancing</div>
+                    <p class="card-desc">High-performance rendering of 100,000+ objects with custom shaders and spatial effects.</p>
                 </div>
                 <div class="card-action">
                     Launch Experience <span class="arrow">→</span>

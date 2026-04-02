@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ MASSIVE GPU INSTANCING EARTH</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --glass-bg: rgba(20, 20, 25, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --accent-cyan: #00f5ff;
+            --accent-purple: #bf5af2;
+            --accent-green: #32d74b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+            height: 100vh;
+        }
+
+        canvas { display: block; }
+
+        /* PREMIUM GLASS HUD */
+        .hud-container {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 320px;
+            backdrop-filter: blur(28px) saturate(180%);
+            -webkit-backdrop-filter: blur(28px) saturate(180%);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            pointer-events: auto;
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.1em;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #fff 40%, var(--accent-cyan));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .stat-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.04);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-label { font-size: 0.6rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; margin-bottom: 4px; }
+        .stat-value { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 1rem; color: var(--accent-cyan); }
+
+        .control-group { margin-bottom: 20px; }
+        .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .label-row label { font-size: 0.75rem; color: rgba(255, 255, 255, 0.8); }
+        .range-val { font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600; }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
+        }
+
+        /* SHORTCUT HINTS */
+        .shortcuts {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+            line-height: 1.6;
+        }
+
+        .key-hint { background: rgba(255, 255, 255, 0.1); padding: 2px 5px; border-radius: 4px; color: #fff; margin-right: 4px; }
+
+        .description-box {
+            margin-top: 24px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .description-box h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            letter-spacing: 0.15em;
+            margin-bottom: 8px;
+        }
+
+        .description-box p {
+            font-size: 0.72rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.55);
+            font-weight: 300;
+        }
+
+        .description-box strong { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
+
+        .param-guide {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .guide-item {
+            font-size: 0.62rem;
+            color: rgba(255, 255, 255, 0.4);
+            display: block;
+        }
+
+        .guide-item strong {
+            color: var(--accent-cyan);
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        .bottom-right {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            text-align: right;
+            pointer-events: none;
+        }
+
+        .version-tag { font-size: 0.6rem; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.2em; text-transform: uppercase; }
+        .mode-indicator { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 700; color: #fff; margin-top: 4px; opacity: 0.8; }
+
+        /* NAVIGATION BUTTONS */
+        .nav-panel {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .mode-btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px);
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            color: #fff;
+            background: rgba(0, 245, 255, 0.15);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+        }
+
+        .mode-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.08); }
+    </style>
+</head>
+<body>
+    <div class="hud-container">
+        <h1>GPU Data Engine</h1>
+        
+        <div class="stat-panel">
+            <div class="stat-item">
+                <div class="stat-label">Instanced Nodes</div>
+                <div class="stat-value" id="node-count">150,000</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Render State</div>
+                <div class="stat-value" id="fps-val">60 FPS</div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="label-row"><label>Data Density</label><div class="range-val" id="val-density">150k</div></div>
+            <input type="range" id="slider-density" min="1000" max="250000" step="1000" value="150000">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row"><label>Flow Velocity</label><div class="range-val" id="val-flow">1.2x</div></div>
+            <input type="range" id="slider-flow" min="0" max="5" step="0.1" value="1.2">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row"><label>Atmosphere Intensity</label><div class="range-val" id="val-atmos">2.0</div></div>
+            <input type="range" id="slider-atmos" min="0" max="5" step="0.1" value="2.0">
+        </div>
+
+        <div class="description-box">
+            <h3>ENGINE BRIEF</h3>
+            <p>이 시스템은 <strong>150,000개 이상의 개별 노드</strong>를 GPU 상에서 직접 제어하는 <strong>Massive Instancing</strong> 기법을 사용하여, 전 세계의 데이터 흐름(Data Flow)을 실시간으로 시각화합니다. </p>
+            
+            <div class="param-guide">
+                <span class="guide-item"><strong>Density/Flow/Atmos</strong>: 데이터 밀도, 속도, 대기광 조절</span>
+                <span class="guide-item"><strong>Data Flow</strong>: 구 표면을 흐르는 벡터 데이터 애니메이션</span>
+                <span class="guide-item"><strong>Network</strong>: 전 세계 인프라 노드의 정적 연결 구조 시각화</span>
+                <span class="guide-item"><strong>Heatmap</strong>: 데이터의 에너지 밀도를 맥동(Pulse)으로 표현</span>
+            </div>
+        </div>
+
+        <div class="shortcuts">
+            <p><span class="key-hint">S1</span> Point Cloud Cloud (Default)</p>
+            <p><span class="key-hint">S2</span> Network Mesh (Heatmap)</p>
+            <p><span class="key-hint">S3</span> Pulse Matrix (Rhythmic)</p>
+            <p><span class="key-hint">S4</span> Star Drift (Cosmological)</p>
+        </div>
+    </div>
+
+    <div class="nav-panel">
+        <button class="mode-btn active" data-mode="data">DATA FLOW</button>
+        <button class="mode-btn" data-mode="network">NETWORK</button>
+        <button class="mode-btn" data-mode="heat">HEATMAP</button>
+    </div>
+
+    <div class="bottom-right">
+        <div class="version-tag">STABLE V3.2 / GPU ENGINE</div>
+        <div class="mode-indicator" id="current-mode">DATA FLOW</div>
+    </div>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>

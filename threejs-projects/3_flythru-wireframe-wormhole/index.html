@@ -3,11 +3,240 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Robot Bobby 3D</title>
+    <title>Wormhole Explorer Pro HUD - Apple UI Edition</title>
     <style>
       body {
         margin: 0;
+        overflow: hidden;
+        background: #000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
+      
+      /* Premium Apple Design Language */
+      :root {
+        --apple-glass-bg: rgba(10, 10, 20, 0.75);
+        --apple-glass-blur: blur(48px) saturate(200%);
+        --apple-glass-border: 1px solid rgba(255, 255, 255, 0.2);
+        --apple-accent-red: #ff453a;
+        --ui-text-bright: #ffffff;
+        --ui-text-muted: rgba(255, 255, 255, 0.5);
+        
+        /* Official Game Color Scheme Map */
+        --theme-1-rainbow: #ff3b30;
+        --theme-2-cosmic: #64d2ff;
+        --theme-3-twilight: #ffd60a;
+        --theme-4-aurora: #bf5af2;
+        --theme-5-cyan: #007aff;
+        --theme-6-sunset: #ff9500;
+        --theme-7-lime: #32d74b;
+      }
+
+      /* Game Side Box - Slim Premium Sidebar */
+      .controls-sidebar {
+        position: fixed;
+        top: 25px;
+        right: 25px;
+        width: 250px;
+        background: var(--apple-glass-bg);
+        backdrop-filter: var(--apple-glass-blur);
+        -webkit-backdrop-filter: var(--apple-glass-blur);
+        border: var(--apple-glass-border);
+        border-radius: 36px;
+        padding: 24px;
+        color: white;
+        box-shadow: 0 50px 150px rgba(0, 0, 0, 0.8);
+        user-select: none;
+        z-index: 1000;
+      }
+
+      .sidebar-grip {
+        width: 44px;
+        height: 5px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        margin: -8px auto 22px;
+        cursor: grab;
+      }
+
+      .sidebar-header {
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.25em;
+        text-align: center;
+        color: var(--ui-text-muted);
+        margin-bottom: 28px;
+        text-transform: uppercase;
+      }
+
+      /* Premium Slider & Row (Refined) */
+      .setting-row { margin-bottom: 24px; position: relative; }
+      .setting-header { 
+        display: flex; 
+        align-items: center; 
+        font-size: 11px; 
+        margin-bottom: 14px; 
+        color: var(--row-color); 
+        cursor: pointer; 
+        font-weight: 800;
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      
+      .auto-indicator { 
+        font-size: 8px; 
+        width: 14px; 
+        height: 14px; 
+        background: rgba(255,255,255,0.1); 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        margin-right: 15px; 
+        font-weight: 900; 
+      }
+      
+      .setting-label { flex-grow: 1; letter-spacing: 0.05em; }
+      .slider-value { 
+        font-weight: 900; 
+        font-variant-numeric: tabular-nums; 
+        color: var(--ui-text-bright); 
+        font-size: 11px; 
+        background: rgba(255,255,255,0.06); 
+        padding: 2px 10px; 
+        border-radius: 20px; 
+      }
+
+      /* Refined Slider Dot (Ultra Slim) */
+      .apple-slider { 
+        -webkit-appearance: none; 
+        appearance: none; 
+        width: 100%; 
+        height: 4px; 
+        background: rgba(255, 255, 255, 0.1); 
+        border-radius: 10px; 
+        outline: none; 
+      }
+      
+      .apple-slider::-webkit-slider-thumb { 
+        -webkit-appearance: none; 
+        appearance: none; 
+        width: 14px; 
+        height: 14px; 
+        background: #ffffff; 
+        border: 4.5px solid var(--row-color); 
+        border-radius: 50%; 
+        cursor: pointer; 
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); 
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .apple-slider::-webkit-slider-thumb:hover { width: 17px; height: 17px; box-shadow: 0 0 12px var(--row-color); }
+
+      .setting-row.auto-active { --row-color: var(--apple-accent-red) !important; }
+      .setting-row.auto-active .auto-indicator { background: var(--apple-accent-red); color: white; }
+      .setting-row.auto-active .setting-header { animation: system-override 1.5s infinite ease-in-out; }
+      @keyframes system-override { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+      .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 25px; }
+      .apple-btn { 
+        background: rgba(255, 255, 255, 0.1); 
+        border: 1px solid rgba(255, 255, 255, 0.12); 
+        border-radius: 18px; 
+        padding: 15px; 
+        color: white; 
+        font-size: 10px; 
+        font-weight: 800; 
+        cursor: pointer; 
+        transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        text-transform: uppercase; 
+        letter-spacing: 0.12em; 
+      }
+      .apple-btn:hover { background: rgba(255, 255, 255, 0.22); transform: translateY(-3px); }
+      .apple-btn.full { grid-column: span 2; background: rgba(0, 122, 255, 0.35); color: #64d2ff; }
+      
+      /* Game Play Box - Symmetry 180px */
+      .apple-player {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 820px;
+        height: 64px;
+        background: var(--apple-glass-bg);
+        backdrop-filter: var(--apple-glass-blur);
+        -webkit-backdrop-filter: var(--apple-glass-blur);
+        border: var(--apple-glass-border);
+        border-radius: 40px;
+        display: flex;
+        align-items: center;
+        padding: 0 32px;
+        color: white;
+        box-shadow: 0 30px 100px rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+      }
+
+      .player-row { display: flex; align-items: center; width: 100%; justify-content: space-between; }
+      
+      .volume-group { display: flex; align-items: center; gap: 14px; width: 180px; }
+      .volume-btn { 
+        background: none; 
+        border: none; 
+        font-size: 18px; /* Size for Symbol */
+        color: #64d2ff; 
+        cursor: pointer; 
+        padding: 4px; 
+        border-radius: 50%; 
+        transition: 0.3s; 
+        min-width: 32px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        opacity: 0.8;
+      }
+      .volume-btn:hover { opacity: 1; transform: scale(1.1); background: rgba(255,255,255,0.1); }
+      .volume-btn.muted { color: var(--apple-accent-red); filter: drop-shadow(0 0 8px rgba(255,69,58,0.4)); }
+
+      .playback-group { display: flex; align-items: center; gap: 24px; position: absolute; left: 50%; transform: translateX(-50%); }
+      .extra-group { display: flex; align-items: center; gap: 18px; width: 180px; justify-content: flex-end; }
+
+      .player-btn-mini { 
+        background: none; 
+        border: none; 
+        color: white; 
+        cursor: pointer; 
+        width: 34px; 
+        height: 34px; 
+        border-radius: 50%; 
+        opacity: 0.6; 
+        transition: 0.25s; 
+        font-size: 16px; 
+        font-weight: 800; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+      }
+      .player-btn-mini:hover { opacity: 1; transform: scale(1.15); background: rgba(255,255,255,0.1); }
+      
+      /* Main Play/Pause Geometry */
+      .player-btn-main { 
+        background: white; 
+        border: none; 
+        color: black; 
+        cursor: pointer; 
+        width: 38px; 
+        height: 38px; 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        transform: scale(1.2); 
+        box-shadow: 0 8px 25px rgba(255,255,255,0.4); 
+        transition: 0.3s; 
+        font-size: 16px; 
+      }
+      .player-btn-main.playing { border: 3px solid #007aff; box-shadow: 0 0 30px rgba(0,122,255,0.6); }
+      
+      .timeline-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 3px; background: rgba(255,255,255,0.18); border-radius: 10px; }
+      .timeline-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; background: white; border-radius: 50%; border: 2px solid #007aff; }
+      .time-label { font-size: 9px; font-weight: 800; opacity: 0.4; font-variant-numeric: tabular-nums; }
     </style>
     <script type="importmap">
       {
@@ -19,6 +248,106 @@
     </script>
   </head>
   <body>
+    <!-- Game Side Box -->
+    <div class="controls-sidebar" id="sidebar">
+      <div class="sidebar-grip" id="sidebar-grip"></div>
+      <div class="sidebar-header">WORMHOLE EXPLORER PRO</div>
+
+      <div class="setting-row" id="row-1" style="--row-color: var(--theme-1-rainbow);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-1">1</span>
+          <label class="setting-label">FLY POSITION</label>
+          <span class="slider-value" id="val-1">0.00</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-1" min="0" max="1" step="0.001" value="0">
+      </div>
+
+      <div class="setting-row" id="row-2" style="--row-color: var(--theme-2-cosmic);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-2">2</span>
+          <label class="setting-label">FLY SPEED</label>
+          <span class="slider-value" id="val-2">1.00</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-2" min="0.1" max="5" step="0.1" value="1.0">
+      </div>
+
+      <div class="setting-row" id="row-3" style="--row-color: var(--theme-3-twilight);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-3">3</span>
+          <label class="setting-label">TUBE RADIUS</label>
+          <span class="slider-value" id="val-3">0.65</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-3" min="0.1" max="2.0" step="0.01" value="0.65">
+      </div>
+
+      <div class="setting-row" id="row-4" style="--row-color: var(--theme-4-aurora);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-4">4</span>
+          <label class="setting-label">FIELD OF VIEW</label>
+          <span class="slider-value" id="val-4">75.0</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-4" min="30" max="140" step="1" value="75">
+      </div>
+
+      <div class="setting-row" id="row-5" style="--row-color: var(--theme-5-cyan);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-5">5</span>
+          <label class="setting-label">HUE THEME</label>
+          <span class="slider-value" id="val-5">0.70</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-5" min="0" max="0.9" step="0.01" value="0.7">
+      </div>
+
+      <div class="setting-row" id="row-6" style="--row-color: var(--theme-6-sunset);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-6">6</span>
+          <label class="setting-label">BLOOM POWER</label>
+          <span class="slider-value" id="val-6">3.50</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-6" min="0" max="10" step="0.1" value="3.5">
+      </div>
+
+      <div class="setting-row" id="row-7" style="--row-color: var(--theme-7-lime);">
+        <div class="setting-header">
+          <span class="auto-indicator" id="ind-7">7</span>
+          <label class="setting-label">FOG DENSITY</label>
+          <span class="slider-value" id="val-7">0.30</span>
+        </div>
+        <input type="range" class="apple-slider" id="input-7" min="1" max="100" step="1" value="30">
+      </div>
+
+      <div class="action-buttons">
+        <button class="apple-btn" id="btn-pause">PAUSE ENGINE</button>
+        <button class="apple-btn full" id="btn-reset">HARD RESET CORE</button>
+      </div>
+    </div>
+
+    <!-- Game Play Box - Refined Symbol UI -->
+    <div class="apple-player" id="apple-player">
+      <div class="player-row">
+        <!-- 좌측 볼륨 그룹 (180px) -->
+        <div class="volume-group">
+          <button class="volume-btn" id="volume-toggle">🔊</button>
+          <input type="range" class="timeline-slider" id="volume-slider" min="0" max="1" step="0.01" value="0.6" style="width: 100px;">
+        </div>
+
+        <!-- 중앙 제어 그룹 (대칭) -->
+        <div class="playback-group">
+          <button class="player-btn-mini" id="player-reset">↩</button>
+          <button class="player-btn-mini" id="player-speed-down">«</button>
+          <button class="player-btn-main" id="player-play">▶</button>
+          <button class="player-btn-mini" id="player-speed-up">»</button>
+          <button class="player-btn-mini" id="player-fullscreen">⛶</button>
+        </div>
+
+        <!-- 우측 정보 그룹 (180px) -->
+        <div class="extra-group">
+          <span class="time-label" id="time-current">0:00</span>
+          <input type="range" class="timeline-slider" id="player-timeline" min="0" max="1" step="0.001" value="0">
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="index.js"></script>
   </body>
 </html>

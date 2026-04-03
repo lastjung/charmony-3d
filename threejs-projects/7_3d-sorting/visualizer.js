@@ -13,9 +13,59 @@ let valueToHue = {};
 let BAR_SPACING = 0.2;
 let MAX_HEIGHT = 10;
 
-// Fill ratios relative to viewport
-const WIDTH_FILL_RATIO = 0.9;
-const HEIGHT_FILL_RATIO = 0.8;
+// --- Audio Engine (Web Audio API) ---
+let audioCtx = null;
+let masterGain = null;
+const PENTATONIC_SCALE = [
+  261.63, 293.66, 329.63, 392.00, 440.00, // C4, D4, E4, G4, A4
+  523.25, 587.33, 659.25, 783.99, 880.00, // C5, D5, E5, G5, A5
+  1046.50, 1174.66, 1318.51, 1567.98, 1760.00 // C6, D6, E6, G6, A6
+];
+
+export function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.connect(audioCtx.destination);
+  
+  // HUD 볼륨 및 뮤트 연동
+  const volSlider = document.getElementById('ui-vol');
+  const muteBtn = document.getElementById('ui-mute');
+  
+  const updateVolume = () => {
+    const isMuted = muteBtn?.dataset.muted === 'true';
+    const volume = isMuted ? 0 : (volSlider ? volSlider.value / 100 : 0.8);
+    masterGain.gain.setTargetAtTime(volume, audioCtx.currentTime, 0.05);
+  };
+
+  if (volSlider) volSlider.addEventListener('input', updateVolume);
+  if (muteBtn) muteBtn.addEventListener('click', updateVolume);
+  updateVolume();
+}
+
+export function playSynthesizedNote(value, BAR_COUNT, isSwap = false) {
+  if (!audioCtx) initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const osc = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  
+  // 펜타토닉 음계 매핑
+  const scaleIdx = Math.floor((value / BAR_COUNT) * (PENTATONIC_SCALE.length - 1));
+  osc.frequency.setValueAtTime(PENTATONIC_SCALE[scaleIdx], audioCtx.currentTime);
+  
+  // 음색 설정 (실로폰 스타일: Sine + Triangle)
+  osc.type = isSwap ? 'triangle' : 'sine';
+  
+  gainNode.gain.setValueAtTime(isSwap ? 0.25 : 0.15, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (isSwap ? 0.3 : 0.1));
+  
+  osc.connect(gainNode);
+  gainNode.connect(masterGain);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + (isSwap ? 0.3 : 0.1));
+}
 
 export let dataArray = [];
 let scene, camera, renderer, controls, barsGroup;
@@ -51,7 +101,7 @@ export function initVisualizer(canvas) {
   // Removed redundant pre-check for WebGL2/WebGL1 support.
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x202020);
+  scene.background = new THREE.Color(0x000000);
 
   // Camera setup
   const fov = 45;
@@ -148,6 +198,11 @@ export function highlightComparedIndices(index1, index2) {
     dot.position.z = 0;
 
     indicatorGroup.add(dot);
+
+    // 가벼운 비교음 (Sine)
+    if (i === index1) {
+      playSynthesizedNote(dataArray[i], BAR_COUNT, false);
+    }
   });
 }
 
@@ -166,6 +221,9 @@ export function updateScaleAndBars() {
   barsGroup.clear();
 
   const totalWidth = BAR_COUNT * (BAR_WIDTH + BAR_SPACING);
+
+  // 무겁고 경쾌한 교체음 (Triangle)
+  playSynthesizedNote(dataArray[Math.floor(Math.random() * BAR_COUNT)], BAR_COUNT, true);
 
   for (let i = 0; i < BAR_COUNT; i++) {
       const value = dataArray[i];

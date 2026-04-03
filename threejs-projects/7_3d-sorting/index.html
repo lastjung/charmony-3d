@@ -15,17 +15,71 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="controls">
-    <button id="startPauseBtn">Start</button>
-    <button id="stepBtn">Step</button>
-    <select id="algorithmSelect">
-    </select>
-    <label for="speedSlider">Speed:</label>
-    <input type="range" id="speedSlider" min="1" max="100" value="50" />
-    <p id="algorithmDescription"></p>
-    <div id="fsmStateDisplay">IDLE</div>
-    <div id="countdownDisplay"></div>
+  <!-- 상단 전용 정보 HUD (Pill Style) -->
+  <div id="top-pill-hud" class="top-hud">
+    <div id="ui-timer" class="top-timer">00:00:00</div>
+    <div id="ui-meta" class="top-meta">BUBBLE SORT • IDLE</div>
   </div>
+
+  <!-- Apple Side Settings (사용자 정의 상태 보존) -->
+  <div id="apple-side" class="apple-sidebar">
+    <div class="sidebar-grip"></div>
+    
+    <div class="set-row">
+      <label class="set-label">1. ALGORITHM</label>
+      <select id="algorithmSelect" class="apple-select"></select>
+    </div>
+
+    <div class="set-row">
+      <label class="set-label">2. SPEED</label>
+      <input type="range" id="speedSlider" min="1" max="100" value="50" class="apple-input" />
+      <div style="font-size: 10px; color: var(--accent-blue); text-align: right; margin-top: 5px; font-weight: 800;" id="sp-val">50</div>
+    </div>
+
+    <div class="set-row">
+      <label class="set-label">3. METADATA</label>
+      <p id="algorithmDescription" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;"></p>
+    </div>
+  </div>
+
+  <!-- Apple Premium Play Box (Icons Only) -->
+  <div id="apple-hud" class="apple-player">
+    <div class="left-group">
+      <button class="btn-icon-wrap" id="ui-mute" title="Volume/Mute">
+        <svg viewBox="0 0 24 24" id="svg-mute-ic"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </button>
+      <input type="range" class="vol-slider" id="ui-vol" value="80" />
+      <button class="btn-icon-wrap" id="ui-next" title="Next">
+        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+      </button>
+    </div>
+
+    <div class="center-group">
+      <button class="btn-icon-wrap" id="ui-reset" title="Partial Reset">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+      </button>
+      <button class="btn-icon-wrap-mini" id="ui-down" title="Slow Down">
+        <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+      </button>
+      <button class="btn-main-icon" id="startPauseBtn">
+        <svg viewBox="0 0 24 24" id="svg-p-i"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="btn-icon-wrap-mini" id="ui-up" title="Speed Up">
+        <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </button>
+      <button class="btn-icon-wrap" id="ui-reshuffle" title="Scramble">
+        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.45 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+      </button>
+    </div>
+
+    <div class="right-group">
+      <button id="apple-fs" class="btn-icon-wrap" title="Full Screen">
+        <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm0-4h2V7h3V5H5v5zm10 7h-3v2h5v-5h-2v3zm0-12V5h-5v2h3v3h2V5z"/></svg>
+      </button>
+      <div id="countdownDisplay" class="countdown-chip"></div>
+    </div>
+  </div>
+
   <canvas id="three-canvas"></canvas>
   <script type="module" src="app.js"></script>
 </body>

@@ -34,8 +34,8 @@ const DEFAULT_PARAMS = {
     fov: 75,
     hue: 0.7,
     bloomStrength: 3.5,
-    fogDensity: 30, 
-    volume: 0.6
+    fogDensity: 300, 
+    volume: 0
 };
 
 const params = { ...DEFAULT_PARAMS };
@@ -49,7 +49,7 @@ const autoModes = {
     4: { active: false, base: 85, amp: 55, speed: 0.0007, startTime: 0, min: 30, max: 140 },
     5: { active: false, base: 0.45, amp: 0.45, speed: 0.0006, startTime: 0, min: 0, max: 0.9 },
     6: { active: false, base: 5.0, amp: 5.0, speed: 0.0004, startTime: 0, min: 0, max: 10 },
-    7: { active: false, base: 50, amp: 49, speed: 0.0003, startTime: 0, min: 1, max: 100 }
+    7: { active: false, base: 250, amp: 240, speed: 0.0003, startTime: 0, min: 10, max: 500 }
 };
 
 // --- "Velocity Sync" Piano Audio Engine ---
@@ -163,8 +163,6 @@ const updateUI = () => {
     values[4].innerText = params.hue.toFixed(2);
     values[5].innerText = params.bloomStrength.toFixed(2);
     values[6].innerText = (params.fogDensity / 100).toFixed(2); 
-    document.getElementById('player-timeline').value = params.flyProgress;
-    document.getElementById('time-current').innerText = `0:${Math.floor(params.flyProgress * 60).toString().padStart(2, '0')}`;
     playBtn.innerText = params.playing ? "||" : "▶";
     playBtn.classList.toggle('playing', params.playing);
     volSlider.value = params.volume;
@@ -240,14 +238,87 @@ const setupInteractions = () => {
     document.getElementById('player-speed-up').onclick = () => { params.flySpeed = Math.min(5, params.flySpeed + 0.5); inputs[1].value = params.flySpeed; updateUI(); };
     document.getElementById('player-speed-down').onclick = () => { params.flySpeed = Math.max(0.1, params.flySpeed - 0.5); inputs[1].value = params.flySpeed; updateUI(); };
     document.getElementById('player-fullscreen').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
-    document.getElementById('player-timeline').oninput = (e) => { params.flyProgress = parseFloat(e.target.value); params.playing = false; updateUI(); };
-    
+
+    const sidebar = document.getElementById('sidebar');
+    const playerBar = document.getElementById('apple-player');
+    const uiToggleBtn = document.getElementById('player-show-all');
+    let uiVisible = true;
+
+    const setUiVisibility = (visible) => {
+        uiVisible = visible;
+        if (uiVisible) {
+            sidebar.classList.remove('hidden');
+            playerBar.classList.remove('hidden');
+            sidebar.style.visibility = 'visible';
+            sidebar.style.display = 'block';
+            playerBar.style.visibility = 'visible';
+            playerBar.style.display = 'flex';
+            uiToggleBtn.textContent = '▣';
+            uiToggleBtn.title = 'Hide UI panels (Esc)';
+        } else {
+            sidebar.classList.add('hidden');
+            playerBar.classList.add('hidden');
+            sidebar.style.visibility = 'hidden';
+            sidebar.style.display = 'none';
+            playerBar.style.visibility = 'hidden';
+            playerBar.style.display = 'none';
+            uiToggleBtn.textContent = '⧉';
+            uiToggleBtn.title = 'Show UI panels (Esc)';
+        }
+    };
+
+    uiToggleBtn.onclick = () => setUiVisibility(!uiVisible);
+    setUiVisibility(true);
+
     rows.forEach((row, i) => {
         const header = row.querySelector('.setting-header');
         if (header) header.onclick = (e) => {
-            const id = i + 1; autoModes[id].active = !autoModes[id].active; autoModes[id].startTime = performance.now();
-            updateUI(); e.stopPropagation();
+            const id = i + 1; 
+            const m = autoModes[id];
+            
+            if (!m.active) {
+                const getParamName = (id) => ["flyProgress", "flySpeed", "tubeRadius", "fov", "hue", "bloomStrength", "fogDensity"][id-1];
+                const currentVal = params[getParamName(id)];
+                const mid = (m.min + m.max) / 2;
+                const amp = (m.max - m.min) / 2;
+                m.phaseOffset = Math.asin(Math.max(-1, Math.min(1, (currentVal - mid) / amp)));
+                m.startTime = performance.now();
+            }
+            
+            m.active = !m.active;
+            updateUI(); 
+            e.stopPropagation();
         };
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { 
+            resumeAudio(); 
+            params.playing = !params.playing; 
+            updateUI(); 
+            e.preventDefault(); 
+        }
+        if (e.code === 'Escape') {
+            setUiVisibility(true);
+            e.preventDefault();
+        }
+        if (e.shiftKey && e.code.startsWith('Digit')) {
+            const id = parseInt(e.code.replace('Digit', ''));
+            if (autoModes[id]) {
+                const m = autoModes[id];
+                if (!m.active) {
+                    const getParamName = (id) => ["flyProgress", "flySpeed", "tubeRadius", "fov", "hue", "bloomStrength", "fogDensity"][id-1];
+                    const currentVal = params[getParamName(id)];
+                    const mid = (m.min + m.max) / 2;
+                    const amp = (m.max - m.min) / 2;
+                    m.phaseOffset = Math.asin(Math.max(-1, Math.min(1, (currentVal - mid) / amp)));
+                    m.startTime = performance.now();
+                }
+                m.active = !m.active;
+                updateUI();
+                e.preventDefault();
+            }
+        }
     });
 };
 
@@ -258,8 +329,10 @@ function animate(t) {
     if (params.playing) params.flyProgress = (params.flyProgress + delta * 0.05 * params.flySpeed) % 1;
     [1, 2, 3, 4, 5, 6, 7].forEach(id => {
         if (autoModes[id].active) {
-            const m = autoModes[id]; const elapsed = t - (m.startTime || 0);
-            const wave = (Math.sin(elapsed * m.speed) + 1) / 2; const next = m.min + wave * (m.max - m.min);
+            const m = autoModes[id]; 
+            const elapsed = t - (m.startTime || 0);
+            const wave = (Math.sin(elapsed * m.speed + (m.phaseOffset || 0)) + 1) / 2; 
+            const next = m.min + wave * (m.max - m.min);
             inputs[id-1].value = next;
             if (id === 1) params.flyProgress = next;
             if (id === 2) params.flySpeed = next;

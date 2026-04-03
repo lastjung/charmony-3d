@@ -17,6 +17,7 @@
             --accent-amber: #f59e0b;
             --accent-rose: #f43f5e;
             --accent-emerald: #10b981;
+            --accent-indigo: #6366f1;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --transition: cubic-bezier(0.4, 0, 0.2, 1);
@@ -58,6 +59,7 @@
             letter-spacing: -2px;
             background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 12px;
             text-transform: uppercase;
@@ -183,6 +185,7 @@
         .card.p4 { --accent-color: var(--accent-amber); }
         .card.p5 { --accent-color: var(--accent-rose); }
         .card.p6 { --accent-color: var(--accent-emerald); }
+        .card.p7 { --accent-color: var(--accent-indigo); }
 
         .glow {
             position: absolute;
@@ -212,7 +215,7 @@
     <div class="container">
         <header>
             <h1>Three.js Projects</h1>
-            <p>6 Dazzling Real-time 3D Animations</p>
+            <p>7 Dazzling Real-time 3D Animations</p>
         </header>
 
         <div class="grid">
@@ -288,6 +291,19 @@
                     <div class="card-num">PROJECT 06</div>
                     <div class="card-title">Massive GPU Instancing</div>
                     <p class="card-desc">High-performance rendering of 100,000+ objects with custom shaders and spatial effects.</p>
+                </div>
+                <div class="card-action">
+                    Launch Experience <span class="arrow">→</span>
+                </div>
+            </a>
+
+            <!-- Project 7 -->
+            <a href="./7_3d-sorting/index.html" class="card p7">
+                <div class="glow"></div>
+                <div>
+                    <div class="card-num">PROJECT 07</div>
+                    <div class="card-title">3D Sorting Visualizer</div>
+                    <p class="card-desc">Interactive 3D visualization of 25+ sorting algorithms with smooth rainbow animations.</p>
                 </div>
                 <div class="card-action">
                     Launch Experience <span class="arrow">→</span>

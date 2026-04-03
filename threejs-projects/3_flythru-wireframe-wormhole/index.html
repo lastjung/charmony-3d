@@ -36,7 +36,7 @@
         position: fixed;
         top: 25px;
         right: 25px;
-        width: 240px;
+        width: 200px;
         background: var(--apple-glass-bg);
         backdrop-filter: var(--apple-glass-blur);
         -webkit-backdrop-filter: var(--apple-glass-blur);
@@ -47,6 +47,12 @@
         box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8);
         user-select: none;
         z-index: 1000;
+        transition: 0.25s ease;
+      }
+      .controls-sidebar.hidden {
+        opacity: 0;
+        transform: translateX(20px);
+        pointer-events: none;
       }
 
       .sidebar-grip {
@@ -131,90 +137,66 @@
       .setting-row.auto-active .auto-indicator { background: var(--apple-accent-red); color: white; }
       .setting-row.auto-active .setting-header { animation: system-override 2s infinite ease-in-out; }
       
-      /* Game Play Box - Refined Symmetry */
+      /* Game Play Box - Refined Symmetry & Ultra Slim */
       .apple-player {
         position: fixed;
-        bottom: 40px;
+        bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        width: 860px;
-        height: 64px;
+        width: 90%;
+        max-width: 600px;
+        height: 44px; /* Ultra-Slimmed */
         background: var(--apple-glass-bg);
         backdrop-filter: var(--apple-glass-blur);
         -webkit-backdrop-filter: var(--apple-glass-blur);
         border: var(--apple-glass-border);
-        border-radius: 40px;
+        border-radius: 22px;
         display: flex;
         align-items: center;
-        padding: 0 35px;
+        padding: 0 24px;
         color: white;
-        box-shadow: 0 30px 100px rgba(0, 0, 0, 0.8);
+        box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
         z-index: 1000;
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .apple-player.hidden {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+        pointer-events: none;
       }
 
       .player-row { display: flex; align-items: center; width: 100%; justify-content: space-between; }
       
-      .volume-group { display: flex; align-items: center; gap: 14px; width: 180px; }
+      .volume-group { display: flex; align-items: center; gap: 12px; width: 140px; }
       .volume-btn { 
-        background: none; 
-        border: none; 
-        font-size: 18px; 
-        color: #64d2ff; 
-        cursor: pointer; 
-        padding: 4px; 
-        border-radius: 50%; 
-        transition: 0.3s; 
-        min-width: 32px; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-        opacity: 0.8;
+        background: none; border: none; font-size: 16px; color: #64d2ff; cursor: pointer; padding: 4px; border-radius: 50%; transition: 0.3s; opacity: 0.8;
       }
       .volume-btn:hover { opacity: 1; transform: scale(1.1); background: rgba(255,255,255,0.1); }
-      .volume-btn.muted { color: var(--apple-accent-red); filter: drop-shadow(0 0 8px rgba(255,69,58,0.4)); }
+      .volume-btn.muted { color: var(--apple-accent-red); }
 
-      .playback-group { display: flex; align-items: center; gap: 28px; position: absolute; left: 50%; transform: translateX(-50%); }
-      .extra-group { display: flex; align-items: center; gap: 18px; width: 180px; justify-content: flex-end; }
+      .playback-group { display: flex; align-items: center; gap: 20px; position: absolute; left: 50%; transform: translateX(-50%); }
+      .extra-group { display: flex; align-items: center; gap: 12px; width: 140px; justify-content: flex-end; }
 
       .player-btn-mini { 
-        background: none; 
-        border: none; 
-        color: white; 
-        cursor: pointer; 
-        width: 36px; 
-        height: 36px; 
-        border-radius: 50%; 
-        opacity: 0.6; 
-        transition: 0.25s; 
-        font-size: 17px; /* Increased for symbols */
-        font-weight: 800; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
+        background: none; border: none; color: white; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; opacity: 0.6; transition: 0.25s; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center; 
       }
       .player-btn-mini:hover { opacity: 1; transform: scale(1.15); background: rgba(255,255,255,0.1); }
       
       .player-btn-main { 
-        background: white; 
-        border: none; 
-        color: black; 
-        cursor: pointer; 
-        width: 38px; 
-        height: 38px; 
-        border-radius: 50%; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        transform: scale(1.2); 
-        box-shadow: 0 8px 25px rgba(255,255,255,0.4); 
-        transition: 0.3s; 
-        font-size: 16px; 
+        background: white; border: none; color: black; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.3s; font-size: 14px; 
       }
-      .player-btn-main.playing { border: 3px solid #007aff; box-shadow: 0 0 30px rgba(0,122,255,0.6); }
+      .player-btn-main.playing { border: 2px solid #007aff; box-shadow: 0 0 20px rgba(0,122,255,0.6); }
       
-      .timeline-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 3px; background: rgba(255,255,255,0.18); border-radius: 10px; }
-      .timeline-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; background: white; border-radius: 50%; border: 2px solid #007aff; }
-      .time-label { font-size: 9px; font-weight: 800; opacity: 0.4; font-variant-numeric: tabular-nums; }
+      .timeline-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 3px; background: rgba(255,255,255,0.18); border-radius: 10px; min-width: 60px; }
+      .timeline-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #007aff; }
+
+      /* Mobile Responsiveness */
+      @media screen and (max-width: 768px) {
+        .controls-sidebar { display: none; } /* Hide sidebar on mobile */
+        .apple-player { width: 95%; height: 48px; bottom: 20px; padding: 0 16px; }
+        .volume-group, .extra-group { width: auto; }
+        .volume-group input { display: none; } /* Hide volume slider on mobile */
+      }
     </style>
     <script type="importmap">
       {
@@ -291,33 +273,32 @@
           <label class="setting-label">FOG DENSITY</label>
           <span class="slider-value" id="val-7">0.30</span>
         </div>
-        <input type="range" class="apple-slider" id="input-7" min="1" max="100" step="1" value="30">
+        <input type="range" class="apple-slider" id="input-7" min="1" max="500" step="1" value="300">
       </div>
     </div>
 
-    <!-- Game Play Box - Updated Symbols -->
+    <!-- Game Play Box -->
     <div class="apple-player" id="apple-player">
       <div class="player-row">
-        <!-- 좌측: 볼륨 그룹 (180px) -->
+        <!-- 좌측: 볼륨 그룹 (140px) -->
         <div class="volume-group">
           <button class="volume-btn" id="volume-toggle">🔊</button>
-          <input type="range" class="timeline-slider" id="volume-slider" min="0" max="1" step="0.01" value="0.6" style="width: 100px;">
-          <button class="player-btn-mini" id="player-fullscreen">⛶</button>
+          <input type="range" class="timeline-slider" id="volume-slider" min="0" max="1" step="0.01" value="0" style="width: 80px;">
         </div>
 
         <!-- 중앙: 컨트롤 (Symmetry) -->
         <div class="playback-group">
-          <button class="player-btn-mini" id="player-partial-reset">⏮</button>
+          <button class="player-btn-mini" id="player-partial-reset">↩</button>
           <button class="player-btn-mini" id="player-speed-down">«</button>
           <button class="player-btn-main" id="player-play">▶</button>
           <button class="player-btn-mini" id="player-speed-up">»</button>
-          <button class="player-btn-mini" id="player-full-reset">⟲</button>
+          <button class="player-btn-mini" id="player-full-reset">🔄</button>
         </div>
 
-        <!-- 우측: 정보 및 타임라인 (180px) -->
+        <!-- 우측: 액션 그룹 (140px) -->
         <div class="extra-group">
-          <span class="time-label" id="time-current">0:00</span>
-          <input type="range" class="timeline-slider" id="player-timeline" min="0" max="1" step="0.001" value="0">
+          <button class="player-btn-mini" id="player-fullscreen">⛶</button>
+          <button class="player-btn-mini" id="player-show-all" title="Show All UI (Esc)">▣</button>
         </div>
       </div>
     </div>

@@ -29,31 +29,105 @@ const SVG_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5
 const SVG_MUTE = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 const SVG_MUTED = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
 
-function formatStateLabel(state) {
-  const labels = {
-    STOPPED: 'Stopped',
-    SORTING: 'Sorting',
-    PAUSED: 'Paused',
-    STOPPING: 'Stopping',
-    COUNTDOWN: 'Next Up',
-  };
-  return labels[state] || state;
-}
+let currentPassLabel = '';
+let lastFocusIndices = [];
+let implicitPassNumber = 1;
 
 function updateHUDMeta() {
   const metaEl = document.getElementById('ui-meta');
   if (!metaEl) return;
   const name = algorithms[currentAlgorithm]?.name || currentAlgorithm;
-  metaEl.innerHTML = `<span class="top-algorithm">${name}</span><span class="top-state">${formatStateLabel(fsmState)}</span>`;
+  metaEl.innerHTML = `<span class="top-algorithm">${name}</span>`;
 }
 
-function setHUDStep(detail, context = '', kind = 'idle') {
+function setHUDStep(passLine, detailLine = '', kind = 'idle') {
   const hud = document.getElementById('top-pill-hud');
   const detailEl = document.getElementById('ui-detail');
   const contextEl = document.getElementById('ui-context');
   if (hud) hud.dataset.kind = kind;
-  if (detailEl) detailEl.textContent = detail;
-  if (contextEl) contextEl.textContent = context;
+  if (detailEl) detailEl.textContent = passLine;
+  if (contextEl) contextEl.textContent = detailLine;
+}
+
+function formatDigitLabel(context) {
+  const normalized = String(context || '').toUpperCase();
+  if (normalized.includes('ONES')) return "1's digit";
+  if (normalized.includes('TENS')) return "10's digit";
+  if (normalized.includes('HUNDREDS')) return "100's digit";
+  return context ? context.toLowerCase() : 'values';
+}
+
+function isBubbleFamily(name) {
+  return ['bubbleSort', 'cocktailShakerSort', 'oddEvenSort'].includes(name);
+}
+
+function getImplicitPassLabel(event) {
+  const nodeCount = dataArray.length;
+
+  if (currentAlgorithm === 'radixSort') {
+    return currentPassLabel || `Pass ${implicitPassNumber}: values`;
+  }
+
+  if (currentAlgorithm === 'bubbleSort' && event.indices.length >= 2) {
+    const [left, right] = event.indices;
+    if (left === 0 && right === 1 && lastFocusIndices[0] > 0) {
+      implicitPassNumber++;
+    }
+    const nodes = Math.max(1, nodeCount - (implicitPassNumber - 1));
+    return `Pass ${implicitPassNumber}: ${nodes} nodes`;
+  }
+
+  if (currentAlgorithm === 'selectionSort' && event.indices.length >= 2) {
+    const right = event.indices[1];
+    if (lastFocusIndices.length >= 2 && right < lastFocusIndices[1]) {
+      implicitPassNumber++;
+    }
+    const nodes = Math.max(1, nodeCount - (implicitPassNumber - 1));
+    return `Pass ${implicitPassNumber}: ${nodes} nodes`;
+  }
+
+  if (currentAlgorithm === 'insertionSort' && event.indices.length >= 2) {
+    const right = event.indices[1];
+    if (lastFocusIndices.length >= 2 && right > lastFocusIndices[1]) {
+      implicitPassNumber++;
+    }
+    return `Pass ${implicitPassNumber}: ${Math.min(nodeCount, implicitPassNumber + 1)} nodes`;
+  }
+
+  if (isBubbleFamily(currentAlgorithm)) {
+    const nodes = Math.max(1, nodeCount - (implicitPassNumber - 1));
+    return `Pass ${implicitPassNumber}: ${nodes} nodes`;
+  }
+
+  return currentPassLabel || `Pass ${implicitPassNumber}: ${nodeCount} nodes`;
+}
+
+function getDetailLabel(event) {
+  if (event.kind === 'focus') {
+    if (event.indices.length >= 2) {
+      return `Compare ${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`;
+    }
+    if (event.indices.length === 1) {
+      return `Scan ${event.indices[0] + 1} / ${dataArray.length}`;
+    }
+  }
+
+  if (event.kind === 'move') {
+    const fromIndex = event.indices[0] ?? -1;
+    const toIndex = event.indices[1] ?? fromIndex;
+    if (fromIndex === toIndex) {
+      return `Write index ${fromIndex + 1}`;
+    }
+    return `Swap ${fromIndex + 1} ↔ ${toIndex + 1}`;
+  }
+
+  return 'Ready';
+}
+
+function resetPassTracking() {
+  currentPassLabel = `Pass 1: ${dataArray.length} nodes`;
+  implicitPassNumber = 1;
+  lastFocusIndices = [];
 }
 
 function updateFSMDisplay() {
@@ -112,6 +186,7 @@ function getAlgorithmGenerator() {
   else totalStepsEstimate = n * Math.log2(n) * 4;
   stepCount = 0;
   roundStartData = [...dataArray];
+  resetPassTracking();
   return algo.generator(dataArray);
 }
 
@@ -121,7 +196,7 @@ async function sortLoop() {
   elapsedBeforePause = 0;
   pausedAt = 0;
   startTime = Date.now();
-  setHUDStep('SORT START', algorithms[currentAlgorithm]?.name || currentAlgorithm, 'phase');
+  setHUDStep(currentPassLabel, 'Starting sort', 'phase');
   for await (const step of sorter) {
     if (cancelRequested || sessionId !== sortSessionId) break;
     if (fsmState === 'PAUSED') {
@@ -132,25 +207,27 @@ async function sortLoop() {
     stepCount++;
     if (event.kind === 'phase') {
       setVisualizationPhase(step);
-      setHUDStep(event.label || 'PHASE', event.context || '', 'phase');
+      const phaseMatch = String(event.label || '').match(/(\d+)/);
+      const passNumber = phaseMatch ? Number.parseInt(phaseMatch[1], 10) : implicitPassNumber;
+      implicitPassNumber = Number.isFinite(passNumber) ? passNumber : implicitPassNumber;
+      currentPassLabel = `Pass ${implicitPassNumber}: ${formatDigitLabel(event.context)}`;
+      setHUDStep(currentPassLabel, 'Scan values', 'phase');
     } else if (event.kind === 'focus') {
+      currentPassLabel = getImplicitPassLabel(event);
+      lastFocusIndices = [...event.indices];
       if (event.indices.length >= 2) {
         highlightComparedIndices(event.indices[0], event.indices[1]);
-        setHUDStep(
-          event.label || 'FOCUS',
-          `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`,
-          'compare'
-        );
+        setHUDStep(currentPassLabel, getDetailLabel(event), 'compare');
       } else if (event.indices.length === 1) {
         highlightComparedIndices(event.indices[0], event.indices[0]);
-        setHUDStep(event.label || 'FOCUS', `BAR ${event.indices[0] + 1}`, 'compare');
+        setHUDStep(currentPassLabel, getDetailLabel(event), 'compare');
       }
     } else if (event.kind === 'move') {
       const fromIndex = event.indices[0] ?? -1;
       const toIndex = event.indices[1] ?? fromIndex;
       await animateSwapIndices(fromIndex, toIndex, getSwapDuration());
-      const label = fromIndex === toIndex ? (event.label || 'WRITE') : (event.label || 'SWAP');
-      setHUDStep(label, `BARS ${fromIndex + 1} ↔ ${toIndex + 1}`, 'swap');
+      currentPassLabel = getImplicitPassLabel(event);
+      setHUDStep(currentPassLabel, getDetailLabel(event), 'swap');
     }
     updateHUD();
     await new Promise(r => setTimeout(r, getStepDelay()));
@@ -159,7 +236,7 @@ async function sortLoop() {
   setVisualizationPhase(null);
   sortLoopPromise = null;
   if (!cancelRequested) {
-    setHUDStep('SORT COMPLETE', 'WAITING FOR NEXT ACTION', 'phase');
+    setHUDStep(currentPassLabel, 'Sort complete', 'phase');
     if (autoCycle) transitionTo('COUNTDOWN');
     else transitionTo('STOPPED');
   }
@@ -181,7 +258,7 @@ function transitionTo(newState) {
     const cdEl = document.getElementById('countdownDisplay');
     if (cdEl) cdEl.textContent = '';
     setVisualizationPhase(null);
-    setHUDStep('READY', 'WAITING FOR START', 'idle');
+    setHUDStep(`Pass 1: ${dataArray.length} nodes`, 'Ready', 'idle');
   }
   if (newState === 'SORTING') {
     const isResuming = previousState === 'PAUSED' && sortLoopPromise != null && pausedAt > 0;
@@ -201,12 +278,12 @@ function transitionTo(newState) {
       pausedAt = Date.now();
     }
     updateHUD();
-    setHUDStep('PAUSED', 'PRESS PLAY TO RESUME', 'phase');
+    setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, 'Paused', 'phase');
   }
   if (newState === 'STOPPING') {
     cancelRequested = true;
     sortSessionId++;
-    setHUDStep('STOPPING', 'FINISHING CURRENT STEP', 'phase');
+    setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, 'Stopping', 'phase');
     if (sortLoopPromise) {
       sortLoopPromise.then(() => { cancelRequested = false; transitionTo('SORTING'); });
     } else { cancelRequested = false; transitionTo('SORTING'); }
@@ -215,12 +292,12 @@ function transitionTo(newState) {
     let sl = countdownSeconds;
     const cdEl = document.getElementById('countdownDisplay');
     if (cdEl) cdEl.textContent = `NEXT: ${sl}s`;
-    setHUDStep('AUTO NEXT', `RESTARTS IN ${sl} SECONDS`, 'phase');
+    setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, `Next in ${sl}s`, 'phase');
     countdownInterval = setInterval(() => {
       sl--;
       if (sl > 0) {
         if (cdEl) cdEl.textContent = `NEXT: ${sl}s`;
-        setHUDStep('AUTO NEXT', `RESTARTS IN ${sl} SECONDS`, 'phase');
+        setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, `Next in ${sl}s`, 'phase');
       }
       else { clearInterval(countdownInterval); reshuffle(); pickNext(); transitionTo('SORTING'); }
     }, 1000);

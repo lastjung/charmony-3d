@@ -20,6 +20,10 @@ const state = {
   stepCount: 0,
   phaseLabel: "READY",
   compareLabel: "-",
+  announceVisible: false,
+  announceKicker: "Sort 3D",
+  announceTitle: "Ready",
+  announceDetail: "Press Play",
   isMuted: false,
   immersive: false,
 };
@@ -58,6 +62,10 @@ const ui = {
   fullscreenBtn: document.getElementById("fullscreen-btn"),
   speedDownBtn: document.getElementById("speed-down-btn"),
   speedUpBtn: document.getElementById("speed-up-btn"),
+  announce: document.getElementById("announce"),
+  announceKicker: document.getElementById("announce-kicker"),
+  announceTitle: document.getElementById("announce-title"),
+  announceDetail: document.getElementById("announce-detail"),
   layoutButtons: Array.from(document.querySelectorAll("[data-layout]")),
   shapeButtons: Array.from(document.querySelectorAll("[data-shape]")),
 };
@@ -113,11 +121,14 @@ scene.add(ground);
 
 let data = [];
 let auxValues = new Map();
+let reverseAuxValues = new Map();
 let nodeMeshes = [];
 let sortSession = 0;
 let nodePulseState = [];
 let runStartedAt = 0;
 let elapsedBeforePause = 0;
+const SORT_START_ANNOUNCE_MS = 1200;
+const SORT_STAGE_TRANSITION_MS = 2000;
 
 const baseMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.32,
@@ -175,9 +186,11 @@ function shuffle(values) {
 function buildAuxValues() {
   const shuffled = shuffle(createValueSeries(state.nodeCount));
   auxValues = new Map();
+  reverseAuxValues = new Map();
   const values = createValueSeries(state.nodeCount);
   for (let i = 0; i < values.length; i++) {
     auxValues.set(values[i], shuffled[i]);
+    reverseAuxValues.set(shuffled[i], values[i]);
   }
 }
 
@@ -211,6 +224,16 @@ function getHeightForValue(value) {
     : value;
   const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
   return 0.8 + t * (6 * state.elevation);
+}
+
+function getSortRuntime(criterion) {
+  const needsProxy = criterion === "color";
+  return {
+    workingArray: needsProxy ? data.map(v => auxValues.get(v)) : [...data],
+    toDisplayData(workingArray) {
+      return needsProxy ? workingArray.map(v => reverseAuxValues.get(v)) : [...workingArray];
+    },
+  };
 }
 
 function getLayoutPosition(index, count = state.nodeCount) {
@@ -402,7 +425,10 @@ function updateHud() {
   ui.stepValue.textContent = String(state.stepCount);
   ui.compareValue.textContent = state.compareLabel;
   ui.phaseValue.textContent = state.phaseLabel;
-  ui.metaAlgorithm.textContent = algo?.name ?? state.algorithmKey;
+  const criterionLabel = state.activeCriterion.toUpperCase();
+  const fullAlgoName = `${algo?.name ?? state.algorithmKey} / ${criterionLabel}`;
+
+  ui.metaAlgorithm.textContent = fullAlgoName;
   ui.metaLayout.textContent = state.layout.toUpperCase();
   ui.metaShape.textContent = state.shape.toUpperCase();
   ui.timelineLabel.textContent = state.phaseLabel;
@@ -410,11 +436,28 @@ function updateHud() {
   ui.playBtn.textContent = state.playing ? "Pause" : "Play";
   ui.muteBtn.textContent = state.isMuted ? "Muted" : "Mute";
   ui.fullscreenBtn.textContent = state.immersive ? "Exit" : "Full";
-  ui.hudAlgorithm.textContent = algo?.name ?? state.algorithmKey;
+  ui.hudAlgorithm.textContent = fullAlgoName;
   ui.hudStep.textContent = String(state.stepCount);
-  const criterionPrefix = state.activeCriterion.toUpperCase();
-  ui.hudContext.textContent = `${state.phaseLabel} / ${criterionPrefix}`;
+  ui.hudContext.textContent = state.phaseLabel;
   ui.hudDetail.textContent = state.compareLabel === "-" ? "-" : state.compareLabel;
+  ui.announce.classList.toggle("visible", state.announceVisible);
+  ui.announceKicker.textContent = state.announceKicker;
+  ui.announceTitle.textContent = state.announceTitle;
+  ui.announceDetail.textContent = state.announceDetail;
+}
+
+function showAnnouncement(title, detail = "", kicker = "Sort 3D") {
+  state.announceVisible = true;
+  state.announceKicker = kicker;
+  state.announceTitle = title;
+  state.announceDetail = detail;
+  updateHud();
+}
+
+function hideAnnouncement() {
+  if (!state.announceVisible) return;
+  state.announceVisible = false;
+  updateHud();
 }
 
 async function waitWithCancel(ms, sessionId) {
@@ -436,68 +479,101 @@ async function runSort() {
   const sessionId = ++sortSession;
   state.playing = true;
   runStartedAt = performance.now();
-  state.activeCriterion = state.sortCriterion === "all" ? state.activeCriterion : state.sortCriterion;
   updateHud();
 
-  const generator = algorithms[state.algorithmKey].generator(data);
-  for await (const rawStep of generator) {
+  const algo = algorithms[state.algorithmKey];
+  const criteriaQueue = state.sortCriterion === "all" ? ["height", "color"] : [state.sortCriterion];
+
+  for (let i = 0; i < criteriaQueue.length; i++) {
     if (sessionId !== sortSession || !state.playing) break;
 
-    const event = normalizeSortStep(rawStep);
-    state.stepCount += 1;
-    if (event.kind === "phase") {
-      state.phaseLabel = rawStep.context || rawStep.label || "PHASE";
-      state.compareLabel = "-";
-      highlightIndices([]);
-    } else if (event.kind === "focus") {
-      state.phaseLabel = "SCAN";
-      state.compareLabel = event.indices.length >= 2
-        ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
-        : `${event.indices[0] + 1}`;
-      highlightIndices(event.indices, "focus");
-    } else if (event.kind === "move") {
-      state.phaseLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
-      state.compareLabel = event.indices.length >= 2
-        ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
-        : `${event.indices[0] + 1}`;
-      highlightIndices(event.indices, "move");
-      const [fromIndex = -1, toIndex = fromIndex] = event.indices;
-      await animateSwap(fromIndex, toIndex);
+    const currentLogicCriterion = criteriaQueue[i];
+    const runtime = getSortRuntime(currentLogicCriterion);
+    const generator = algo.generator(runtime.workingArray);
+
+    state.activeCriterion = currentLogicCriterion;
+    state.phaseLabel = `Sorting ${algo.name} by ${currentLogicCriterion.toUpperCase()}`;
+    state.compareLabel = "-";
+    syncNodes();
+    if (i === 0) {
+      showAnnouncement(
+        algo.name,
+        `Sort by ${currentLogicCriterion.toUpperCase()}`,
+        "Starting"
+      );
+    } else {
+      updateHud();
     }
 
-    updateHud();
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
+    if (i === 0) {
+      const canStart = await waitWithCancel(SORT_START_ANNOUNCE_MS, sessionId);
+      if (!canStart || sessionId !== sortSession || !state.playing) break;
+      hideAnnouncement();
+    }
+
+    for await (const rawStep of generator) {
+      if (sessionId !== sortSession || !state.playing) break;
+
+      data = runtime.toDisplayData(runtime.workingArray);
+      const event = normalizeSortStep(rawStep);
+      state.stepCount += 1;
+      
+      if (event.kind === "phase") {
+        state.phaseLabel = rawStep.context || rawStep.label || "PHASE";
+        state.compareLabel = "-";
+        highlightIndices([]);
+      } else if (event.kind === "focus") {
+        state.phaseLabel = "SCAN";
+        state.compareLabel = event.indices.length >= 2
+          ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
+          : `${event.indices[0] + 1}`;
+        highlightIndices(event.indices, "focus");
+      } else if (event.kind === "move") {
+        state.phaseLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
+        state.compareLabel = event.indices.length >= 2
+          ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
+          : `${event.indices[0] + 1}`;
+        highlightIndices(event.indices, "move");
+        const [fromIndex = -1, toIndex = fromIndex] = event.indices;
+        await animateSwap(fromIndex, toIndex);
+      }
+
+      updateHud();
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
+    }
+
+    if (i < criteriaQueue.length - 1 && sessionId === sortSession && state.playing) {
+      const nextLabel = criteriaQueue[i + 1].toUpperCase();
+
+      state.phaseLabel = "Complete";
+      state.compareLabel = `Next: ${algo.name} by ${nextLabel}`;
+      showAnnouncement(
+        "Complete",
+        `Next: Sort by ${nextLabel}`,
+        "Transition"
+      );
+
+      const canContinue = await waitWithCancel(SORT_STAGE_TRANSITION_MS, sessionId);
+      if (!canContinue) break;
+
+      state.activeCriterion = criteriaQueue[i + 1];
+      state.stepCount = 0;
+      state.phaseLabel = "READY";
+      state.compareLabel = "-";
+      syncNodes();
+      hideAnnouncement();
+      updateHud();
+    }
   }
 
   if (sessionId === sortSession) {
     state.playing = false;
     elapsedBeforePause = 0;
     state.phaseLabel = "COMPLETE";
+    state.compareLabel = "-";
     highlightIndices([]);
     syncNodes();
-    updateHud();
-
-    if (state.sortCriterion === "all" && state.activeCriterion === "height") {
-      state.phaseLabel = "NEXT";
-      state.compareLabel = "COLOR IN 2.0s";
-      updateHud();
-
-      const canContinue = await waitWithCancel(2000, sessionId);
-      if (!canContinue || sessionId !== sortSession) return;
-
-      state.activeCriterion = "color";
-      state.compareLabel = "-";
-      state.phaseLabel = "READY";
-      buildAuxValues();
-      syncNodes();
-      await runSort();
-      return;
-    }
-
-    if (state.sortCriterion === "all" && state.activeCriterion === "color") {
-      state.activeCriterion = "height";
-      updateHud();
-    }
+    showAnnouncement("COMPLETE", `${algo.name} finished`, "Final");
   }
 }
 
@@ -533,14 +609,17 @@ function bindUi() {
   ui.algorithmSelect.addEventListener("change", () => {
     state.algorithmKey = ui.algorithmSelect.value;
     state.phaseLabel = "READY";
+    hideAnnouncement();
     updateHud();
   });
 
   ui.sortCriterion.addEventListener("change", () => {
     const nextValue = ui.sortCriterion.value;
     state.sortCriterion = nextValue === "color" || nextValue === "all" ? nextValue : "height";
-    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
-    syncNodes();
+    if (!state.playing) {
+      state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+      syncNodes();
+    }
     updateHud();
   });
 
@@ -584,6 +663,7 @@ function bindUi() {
     state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
     buildAuxValues();
     resetData();
+    hideAnnouncement();
     syncNodes();
   });
 
@@ -594,6 +674,7 @@ function bindUi() {
     elapsedBeforePause = 0;
     state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
     resetData();
+    hideAnnouncement();
     syncNodes();
   });
 
@@ -603,6 +684,7 @@ function bindUi() {
       elapsedBeforePause += performance.now() - runStartedAt;
       state.playing = false;
       sortSession += 1;
+      hideAnnouncement();
       updateHud();
       return;
     }

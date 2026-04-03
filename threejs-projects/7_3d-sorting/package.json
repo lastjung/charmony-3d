@@ -1,0 +1,27 @@
+{
+  "name": "3d-sorting-algorithm-visualizer",
+  "version": "1.0.0",
+  "description": "An interactive 3D visualization of sorting algorithms built with Three.js. It demonstrates how different algorithms sort an array, with smooth animations, rainbow colors, and user controls.",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atoomnetmarc/3D-Sorting-Algorithm-Visualizer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/atoomnetmarc/3D-Sorting-Algorithm-Visualizer/issues"
+  },
+  "homepage": "https://github.com/atoomnetmarc/3D-Sorting-Algorithm-Visualizer#readme",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

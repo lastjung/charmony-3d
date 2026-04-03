@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+#three-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#controls {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  border-radius: 8px;
+  font-family: sans-serif;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#controls button,
+#controls select,
+#controls input[type=range] {
+  margin: 5px;
+  padding: 5px 10px;
+  font-size: 14px;
+  width: 90px;
+  text-align: center;
+}
+
+/* Removed fixed width on #controls */
+
+#speedSlider {
+  width: 120px;
+}
+
+#fsmStateDisplay,
+#countdownDisplay {
+  width: 120px;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+}
+
+#algorithmDescription {
+  max-width: 200px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+}
+
+#controls #algorithmSelect {
+  width: 180px !important;
+}
+
+
+#algorithmDescription {
+  margin-top: 5px;
+  font-size: 12px;
+  max-width: 300px;
+  width: 100%;
+  height: 60px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+}
+
+#controls label {
+  font-size: 14px;
+}
+
+#controls label,
+#controls input[type=range] {
+  vertical-align: middle;
+}

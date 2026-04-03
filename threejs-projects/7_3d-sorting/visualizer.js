@@ -334,26 +334,55 @@ export function highlightComparedIndices(index1, index2) {
   // Clear previous indicators
   indicatorGroup.clear();
 
-  const indices = [index1, index2];
+  const activeIndices = Array.from(new Set([index1, index2].filter(i => i >= 0 && i < barMeshes.length)));
 
-  indices.forEach(i => {
-    const bar = barMeshes[i];
+  // Reset all bars and indicators first (piano keyboard style)
+  barMeshes.forEach((bar, i) => {
     if (!bar) return;
-
-    const dotGeometry = new THREE.SphereGeometry(BAR_WIDTH * 0.3, 16, 16);
-    const dotMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x7a5c00 });
-    const dot = new THREE.Mesh(dotGeometry, dotMaterial);
-
-    dot.position.x = bar.position.x;
-    dot.position.y = -MAX_HEIGHT / 2 - (BAR_WIDTH * 0.3);  // just below the bars
-    dot.position.z = 0;
-
-    indicatorGroup.add(dot);
-
-    // 가벼운 비교음 (Sine)
-    if (i === index1) {
-      playSynthesizedNote(dataArray[i], getDataMaxValue(), false);
+    const isActive = activeIndices.includes(i);
+    
+    // 1. 막대 자체의 하이라이트 (피아노 건반 느낌)
+    if (isActive) {
+      // 활성화된 막대: 밝게 발광하고 위로 살짝 팝업
+      bar.material.emissive.setHex(0xffffff);
+      bar.material.emissiveIntensity = 0.5;
+      bar.scale.set(1.05, 1.05, 1.05); // 살짝 강조
+      
+      // 소환음 (Sine)
+      if (i === index1) {
+        playSynthesizedNote(dataArray[i], getDataMaxValue(), false);
+      }
+    } else {
+      // 비활성화된 막대: 원래 상태로 복구
+      const value = dataArray[i];
+      const color = getBarColor(value);
+      bar.material.emissive.setHex(0x000000);
+      bar.material.emissiveIntensity = 0;
+      bar.scale.set(1, 1, 1);
+      
+      // 만약 RADIX PASS 등의 특수 상태라면 소량의 발광 유지
+      if (activePhaseLabel.includes('RADIX PASS')) {
+        bar.material.emissive.copy(color).multiplyScalar(0.18);
+        bar.material.emissiveIntensity = 1;
+      }
     }
+
+    // 2. 하단 보조 인디케이터 (건반 표시)
+    const keyGeometry = new THREE.BoxGeometry(BAR_WIDTH * 0.9, BAR_WIDTH * 0.18, BAR_WIDTH * 0.8);
+    const keyMaterial = new THREE.MeshStandardMaterial({
+      color: isActive ? 0xfff1a8 : 0x1a1a1a,
+      emissive: isActive ? 0xffea00 : 0x000000,
+      emissiveIntensity: isActive ? 0.6 : 0,
+      transparent: true,
+      opacity: isActive ? 1 : 0.4
+    });
+    const key = new THREE.Mesh(keyGeometry, keyMaterial);
+
+    key.position.x = getBarX(i);
+    key.position.y = -MAX_HEIGHT / 2 - (BAR_WIDTH * 0.32);
+    key.position.z = 0;
+
+    indicatorGroup.add(key);
   });
 }
 
@@ -437,12 +466,18 @@ function positionCamera() {
   const fovRadians = (camera.fov * Math.PI) / 180;
   const aspect = camera.aspect;
 
-  // Calculate distance so that the whole width fits in view
-  const distance = (totalWidth / 2) / Math.tan(fovRadians / 2);
+  // Calculate base distance so that the whole width fits in view
+  let distance = (totalWidth / 2) / Math.tan(fovRadians / 2);
+
+  // If portrait/narrow aspect (mobile), push the camera back further proportionally
+  // to ensure the full width is still visible.
+  if (aspect < 1.2) {
+    distance = distance / (aspect * 0.82);
+  }
 
   console.log('Camera distance:', distance.toFixed(2), 'Camera aspect:', aspect.toFixed(2));
 
-  camera.position.set(0, MAX_HEIGHT / 2, distance * 0.8);
+  camera.position.set(0, MAX_HEIGHT / 2, distance * 0.85);
   camera.lookAt(0, 0, 0);
 }
 

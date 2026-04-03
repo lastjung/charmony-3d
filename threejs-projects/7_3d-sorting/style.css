@@ -44,8 +44,8 @@ body::before {
 /* --- 상단 타이머 HUD (Pill Style) --- */
 .top-hud {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 32px;
+  left: 24px;
   transform: none;
   width: min(78vw, 340px);
   background: linear-gradient(180deg, rgba(20, 28, 44, 0.82), rgba(8, 12, 22, 0.72));
@@ -124,11 +124,14 @@ body::before {
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: 22px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 1px;
+  padding: 6px 8px;
+  width: auto;
+  min-width: 280px;
+  max-width: 96vw;
   z-index: 100;
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.52);
 }
@@ -136,20 +139,17 @@ body::before {
 .left-group,
 .center-group,
 .right-group {
-  min-width: 0;
   display: flex;
   align-items: center;
+  gap: 1px;
 }
 
 .left-group {
-  gap: 10px;
-  justify-content: flex-start;
-  padding: 0 2px;
+  padding-right: 4px;
 }
 
 .center-group {
-  gap: 10px;
-  justify-content: center;
+  padding: 0 4px;
 }
 
 .right-group {
@@ -169,8 +169,8 @@ body::before {
   transition: 0.2s ease;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
-.btn-icon-wrap { width: 36px; height: 36px; }
-.btn-icon-wrap-mini { width: 30px; height: 30px; color: var(--text-secondary); }
+.btn-icon-wrap { width: 28px; height: 28px; border-radius: 9px; }
+.btn-icon-wrap-mini { width: 22px; height: 22px; border-radius: 8px; color: var(--text-secondary); }
 .btn-icon-wrap:hover, .btn-icon-wrap-mini:hover {
   background: rgba(100, 181, 255, 0.12);
   border-color: rgba(100, 181, 255, 0.22);
@@ -182,13 +182,13 @@ body::before {
   border-color: rgba(156, 247, 255, 0.3);
   box-shadow: 0 0 0 1px rgba(156, 247, 255, 0.12), 0 12px 24px rgba(76, 159, 255, 0.18);
 }
-.btn-icon-wrap svg, .btn-icon-wrap-mini svg { width: 17px; height: 17px; fill: currentColor; }
-.btn-icon-wrap-mini svg { width: 14px; height: 14px; }
+.btn-icon-wrap svg { width: 14px; height: 14px; fill: currentColor; }
+.btn-icon-wrap-mini svg { width: 12px; height: 12px; }
 
 .btn-main-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: linear-gradient(180deg, var(--accent-cyan), var(--accent-blue));
   border: 1px solid rgba(255, 255, 255, 0.24);
   color: #02101f;
@@ -205,21 +205,21 @@ body::before {
   color: #fff;
   box-shadow: 0 16px 28px rgba(255, 110, 118, 0.28);
 }
-.btn-main-icon svg { width: 16px; height: 16px; fill: currentColor; }
+.btn-main-icon svg { width: 14px; height: 14px; fill: currentColor; }
 
 .vol-slider {
   -webkit-appearance: none;
   appearance: none;
-  width: min(18vw, 82px);
-  min-width: 58px;
-  height: 5px;
+  width: 50px;
+  min-width: 40px;
+  height: 4px;
   background: linear-gradient(90deg, rgba(100, 181, 255, 0.55), rgba(255, 255, 255, 0.16));
   border-radius: 999px;
 }
 .vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 13px;
-  height: 13px;
+  width: 10px;
+  height: 10px;
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
@@ -312,18 +312,21 @@ body::before {
 .hud-hidden { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(30px) !important; }
 .side-hidden { transform: translateX(340px) !important; }
 
-body.window-fullscreen .top-hud,
-body.window-fullscreen .apple-sidebar {
-  opacity: 0;
-  pointer-events: none;
-}
-
 body.window-fullscreen .top-hud {
-  transform: translateY(-24px);
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: scale(1.05); /* Slight pop for readability */
+}
+
+body.window-fullscreen .apple-sidebar,
+body.window-fullscreen .apple-player {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(40px) scale(0.95);
 }
 
 body.window-fullscreen .apple-sidebar {
-  transform: translateX(340px);
+  transform: translateX(440px) scale(0.95);
 }
 
 body.window-fullscreen .apple-player {
@@ -335,19 +338,19 @@ body.window-fullscreen .apple-player {
 
 @media (max-width: 900px) {
   .top-hud {
-    top: 14px;
-    left: 14px;
-    width: min(84vw, 300px);
-    padding: 10px 16px 9px;
+    top: 24px;
+    left: 18px;
+    width: 220px;
+    padding: 6px 10px 5px;
   }
 
   .apple-sidebar {
     top: auto;
     right: auto;
     left: 50%;
-    bottom: calc(var(--safe-bottom) + 104px);
+    bottom: calc(var(--safe-bottom) + 72px);
     transform: translateX(-50%);
-    width: min(90vw, 460px);
+    width: min(96vw, 380px);
     padding: 18px 14px 14px;
   }
 
@@ -356,106 +359,29 @@ body.window-fullscreen .apple-player {
   }
 
   .apple-player {
-    width: min(92vw, 560px);
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 10px;
-    border-radius: 20px;
+    width: auto;
+    min-width: 260px;
+    gap: 1px;
+    padding: 4px 6px;
+    border-radius: 12px;
   }
 
-  .left-group,
-  .center-group,
-  .right-group {
-    justify-content: center;
-  }
-
-  .right-group {
-    padding-top: 4px;
-  }
-
-  body.window-fullscreen .apple-player {
-    width: calc(100vw - 20px);
-  }
+  .btn-icon-wrap { width: 26px; height: 26px; }
+  .btn-main-icon { width: 32px; height: 32px; }
+  .vol-slider { width: 40px; }
+  .countdown-chip { min-width: 38px; font-size: 7px; }
 }
 
 @media (max-width: 560px) {
-  .top-hud {
-    top: 12px;
-    left: 9px;
-    width: calc(100vw - 18px);
-    border-radius: 16px;
+  .top-hud { 
+    top: 16px;
+    left: 12px;
+    width: calc(100vw - 24px); 
   }
-
-  .top-meta {
-    font-size: 9px;
-    letter-spacing: 1.2px;
-  }
-
-  .top-detail {
-    font-size: 14px;
-  }
-
-  .top-context {
-    font-size: 10px;
-  }
-
-  .apple-sidebar {
-    width: calc(100vw - 14px);
-    bottom: calc(var(--safe-bottom) + 118px);
-    border-radius: 18px;
-  }
-
-  .apple-player {
-    width: calc(100vw - 8px);
-    gap: 8px;
-    padding: 8px;
-    border-radius: 18px;
-  }
-
-  .left-group {
-    display: grid;
-    grid-template-columns: 36px minmax(72px, 1fr) 36px;
-    width: 100%;
-  }
-
-  .center-group {
-    gap: 8px;
-  }
-
-  .right-group {
-    justify-content: space-between;
-    width: 100%;
-  }
-
-  .btn-icon-wrap {
-    width: 34px;
-    height: 34px;
-  }
-
-  .btn-icon-wrap-mini {
-    width: 28px;
-    height: 28px;
-  }
-
-  .btn-main-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
-  }
-
-  .vol-slider {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .countdown-chip {
-    min-width: 68px;
-    justify-content: flex-start;
-  }
-
-  body.window-fullscreen .apple-player {
-    width: calc(100vw - 8px);
-    bottom: 8px;
-    border-radius: 16px;
-  }
+  .apple-sidebar { bottom: calc(var(--safe-bottom) + 68px); }
+  .apple-player { width: calc(100vw - 8px); padding: 4px; }
+  
+  .btn-icon-wrap { width: 24px; height: 24px; }
+  .btn-main-icon { width: 30px; height: 30px; }
+  .vol-slider { display: none; }
 }

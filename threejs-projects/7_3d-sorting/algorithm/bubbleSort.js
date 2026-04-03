@@ -10,20 +10,20 @@ export const bubbleSort = {
   nonNegativeOnly: false,
   supportsEmpty: true,
   async *generator(array) {
-    const n = array.length;
-    let swapped;
-    do {
-      swapped = false;
-      for (let i = 0; i < n - 1; i++) {
-        yield { type: 'compare', indices: [i, i + 1] };
-        if (array[i] > array[i + 1]) {
-          [array[i], array[i + 1]] = [array[i + 1], array[i]];
+    let n = array.length;
+    for (let i = 0; i < n; i++) {
+      let swapped = false;
+      // The inner loop range reduces by 'i' each pass as end elements are sorted
+      for (let j = 0; j < n - 1 - i; j++) {
+        yield { type: 'compare', indices: [j, j + 1] };
+        if (array[j] > array[j + 1]) {
+          [array[j], array[j + 1]] = [array[j + 1], array[j]];
           swapped = true;
-          yield { type: 'swap', indices: [i, i + 1] };
+          yield { type: 'swap', indices: [j, j + 1] };
         }
-        // Yield control to avoid blocking UI
         await new Promise(resolve => setTimeout(resolve, 0));
       }
-    } while (swapped);
+      if (!swapped) break;
+    }
   }
 };

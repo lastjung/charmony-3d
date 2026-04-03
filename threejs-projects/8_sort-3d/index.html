@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sort 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg: #04060d;
+      --panel: rgba(10, 14, 24, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #f7f9fc;
+      --muted: rgba(247, 249, 252, 0.62);
+      --cyan: #6de7ff;
+      --blue: #5b8cff;
+      --amber: #ffc857;
+      --mono: "JetBrains Mono", monospace;
+      --sans: "Outfit", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(91, 140, 255, 0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(109, 231, 255, 0.12), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    body.immersive .panel,
+    body.immersive .top-center,
+    body.immersive .player {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .panel {
+      position: absolute;
+      top: 24px;
+      width: 280px;
+      padding: 18px 18px 16px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 22px;
+      backdrop-filter: blur(24px) saturate(140%);
+      -webkit-backdrop-filter: blur(24px) saturate(140%);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+      z-index: 10;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .hud {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      z-index: 12;
+      display: grid;
+      gap: 6px;
+      width: 320px;
+      padding: 14px 16px;
+      background: rgba(8, 12, 20, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .hud-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .hud-label {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      flex: 0 0 auto;
+    }
+
+    .hud-value {
+      flex: 1;
+      min-width: 0;
+      text-align: right;
+      font-family: var(--mono);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hud-value.algorithm {
+      color: var(--blue);
+    }
+
+    .hud-value.detail {
+      color: var(--text);
+      font-size: 10px;
+    }
+
+    .panel.left { left: 24px; top: 176px; }
+    .panel.right { right: 24px; }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 10px;
+    }
+
+    .panel h1,
+    .panel h2 {
+      font-size: 22px;
+      line-height: 1;
+      margin-bottom: 14px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .field output {
+      font-family: var(--mono);
+      color: var(--cyan);
+      font-size: 11px;
+    }
+
+    select,
+    input[type="range"] {
+      width: 100%;
+    }
+
+    select {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      outline: none;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #111827;
+      cursor: pointer;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .segmented.two {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .chip {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 10px 8px;
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: 180ms ease;
+    }
+
+    .chip.active {
+      background: rgba(91, 140, 255, 0.18);
+      color: var(--text);
+      border-color: rgba(91, 140, 255, 0.42);
+      box-shadow: inset 0 0 0 1px rgba(109, 231, 255, 0.15);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .stat {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-family: var(--mono);
+    }
+
+    .top-center {
+      position: absolute;
+      top: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      text-align: center;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .player {
+      position: absolute;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 14px;
+      min-width: 760px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 22px;
+      backdrop-filter: blur(24px) saturate(140%);
+      -webkit-backdrop-filter: blur(24px) saturate(140%);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+      z-index: 10;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .player-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .player button {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .player button.icon {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+    }
+
+    .player button.icon.main {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+    }
+
+    .player button.primary {
+      background: rgba(255, 200, 87, 0.18);
+      border-color: rgba(255, 200, 87, 0.32);
+    }
+
+    .timeline {
+      flex: 1;
+    }
+
+    .timeline .label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .progress {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .progress > div {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+    }
+
+    .vol-slider {
+      width: 72px;
+      height: 4px;
+      accent-color: white;
+    }
+
+    @media (max-width: 1100px) {
+      .panel {
+        width: 240px;
+      }
+
+      .player {
+        min-width: 0;
+        width: calc(100vw - 40px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-center">
+    <div class="title">Sort 3D</div>
+    <div class="meta"><span id="meta-algorithm">Radix Sort</span> / <span id="meta-layout">Grid</span> / <span id="meta-shape">Rectangle</span></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-line"><span class="hud-label">Algorithm</span><span class="hud-value algorithm" id="hud-algorithm">Radix Sort</span></div>
+    <div class="hud-line"><span class="hud-label">Timer</span><span class="hud-value" id="hud-timer">00:00:00</span></div>
+    <div class="hud-line"><span class="hud-label">Step</span><span class="hud-value" id="hud-step">0</span></div>
+    <div class="hud-line"><span class="hud-label">Context</span><span class="hud-value" id="hud-context">HEIGHT / READY</span></div>
+    <div class="hud-line"><span class="hud-label">Detail</span><span class="hud-value detail" id="hud-detail">-</span></div>
+  </div>
+
+  <aside class="panel left">
+    <div class="eyebrow">Sorting Info</div>
+    <h1>Algorithm Engine</h1>
+    <p class="subtle">정렬 알고리즘은 1차원 배열을 유지하고, 공간 배치는 별도로 바꿉니다. 현재 색은 추가 정보이고 높이가 주값입니다.</p>
+
+    <div class="field">
+      <label for="algorithm-select"><span>Algorithm</span></label>
+      <select id="algorithm-select"></select>
+    </div>
+
+    <div class="field">
+      <label for="sort-criterion"><span>Sort By</span></label>
+      <select id="sort-criterion">
+        <option value="height">Height</option>
+        <option value="color">Color</option>
+        <option value="all">All</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="node-count"><span>Node Count</span><output id="node-count-value">64</output></label>
+      <input type="range" id="node-count" min="16" max="196" step="4" value="64">
+    </div>
+
+    <div class="field">
+      <label for="speed"><span>Playback Speed</span><output id="speed-value">72</output></label>
+      <input type="range" id="speed" min="1" max="100" step="1" value="72">
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Status</div>
+        <div class="stat-value" id="status-value">IDLE</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Active Step</div>
+        <div class="stat-value" id="step-value">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Compare</div>
+        <div class="stat-value" id="compare-value">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Phase</div>
+        <div class="stat-value" id="phase-value">READY</div>
+      </div>
+    </div>
+  </aside>
+
+  <aside class="panel right">
+    <div class="eyebrow">Geometry Info</div>
+    <h2>Spatial Layout</h2>
+    <p class="subtle">오른쪽 패널은 동일한 정렬 데이터를 어떤 공간 구조로 펼칠지 정의합니다. 현재는 Grid, Cube, Sphere scaffold를 제공합니다.</p>
+
+    <div class="field">
+      <label><span>Layout Mode</span></label>
+      <div class="segmented">
+        <button class="chip active" data-layout="grid">Grid</button>
+        <button class="chip" data-layout="cube">Cube</button>
+        <button class="chip" data-layout="sphere">Sphere</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label><span>Shape</span></label>
+      <div class="segmented two">
+        <button class="chip active" data-shape="rectangle">Rectangle</button>
+        <button class="chip" data-shape="sphere">Sphere</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="spacing"><span>Spacing</span><output id="spacing-value">1.20</output></label>
+      <input type="range" id="spacing" min="0.8" max="2.2" step="0.05" value="1.2">
+    </div>
+
+    <div class="field">
+      <label for="elevation"><span>Height Gain</span><output id="elevation-value">1.00</output></label>
+      <input type="range" id="elevation" min="0.4" max="1.8" step="0.05" value="1">
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Color Channel</div>
+        <div class="stat-value">AUX</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Camera</div>
+        <div class="stat-value">ORBIT</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="player">
+    <div class="player-group">
+      <button id="mute-btn" class="icon" title="Mute">Mute</button>
+      <input type="range" id="vol-slider" class="vol-slider" min="0" max="100" step="1" value="80">
+    </div>
+    <div class="timeline">
+      <div class="label">
+        <span id="timeline-label">Ready</span>
+        <span id="fps-label">0 FPS</span>
+      </div>
+      <div class="progress"><div id="progress-bar"></div></div>
+    </div>
+    <div class="player-group">
+      <button id="reset-btn" class="icon" title="Reset">Reset</button>
+      <button id="speed-down-btn" class="icon" title="Slow">-</button>
+      <button id="play-btn" class="icon main primary" title="Play">Play</button>
+      <button id="speed-up-btn" class="icon" title="Fast">+</button>
+      <button id="shuffle-btn" class="icon" title="Shuffle">Mix</button>
+      <button id="fullscreen-btn" class="icon" title="Immersive View">Full</button>
+    </div>
+  </div>
+
+  <script type="module" src="./index.js"></script>
+</body>
+</html>

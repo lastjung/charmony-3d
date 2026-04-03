@@ -1,7 +1,7 @@
 /**
  * Bucket Sort algorithm module.
  * Exports metadata and async generator.
- * Assumes values in range [0, 1).
+ * Normalizes the current input range before distributing values into buckets.
  */
 
 export const bucketSort = {
@@ -13,9 +13,13 @@ export const bucketSort = {
   async *generator(array) {
     const n = array.length;
     const buckets = Array.from({ length: n }, () => []);
+    const min = Math.min(...array);
+    const max = Math.max(...array);
+    const range = Math.max(1, max - min + 1);
 
     for (let i = 0; i < n; i++) {
-      const idx = Math.min(Math.floor(array[i] * n), n - 1);
+      const normalizedValue = (array[i] - min) / range;
+      const idx = Math.min(Math.floor(normalizedValue * n), n - 1);
       buckets[idx].push(array[i]);
       await new Promise(resolve => setTimeout(resolve, 0));
     }

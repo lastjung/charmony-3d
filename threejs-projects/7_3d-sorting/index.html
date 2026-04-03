@@ -17,8 +17,15 @@
 <body>
   <!-- 상단 전용 정보 HUD (Pill Style) -->
   <div id="top-pill-hud" class="top-hud">
-    <div id="ui-timer" class="top-timer">00:00:00</div>
-    <div id="ui-meta" class="top-meta">BUBBLE SORT • IDLE</div>
+    <div class="top-hud-row">
+      <div id="ui-meta" class="top-meta">
+        <span class="top-algorithm">Bubble Sort</span>
+        <span class="top-state">Stopped</span>
+      </div>
+      <div id="ui-timer" class="top-timer">00:00:00</div>
+    </div>
+    <div id="ui-detail" class="top-detail">READY</div>
+    <div id="ui-context" class="top-context">WAITING FOR START</div>
   </div>
 
   <!-- Apple Side Settings (사용자 정의 상태 보존) -->
@@ -26,18 +33,32 @@
     <div class="sidebar-grip"></div>
     
     <div class="set-row">
-      <label class="set-label">1. ALGORITHM</label>
+      <label class="set-label">1. NODE</label>
+      <input type="range" id="nodeCountSlider" min="10" max="200" value="50" class="apple-input" />
+      <div style="font-size: 10px; color: var(--accent-blue); text-align: right; margin-top: 5px; font-weight: 800;" id="node-val">50</div>
+    </div>
+
+    <div class="set-row">
+      <label class="set-label">2. ALGORITHM</label>
       <select id="algorithmSelect" class="apple-select"></select>
     </div>
 
     <div class="set-row">
-      <label class="set-label">2. SPEED</label>
-      <input type="range" id="speedSlider" min="1" max="100" value="50" class="apple-input" />
-      <div style="font-size: 10px; color: var(--accent-blue); text-align: right; margin-top: 5px; font-weight: 800;" id="sp-val">50</div>
+      <label class="set-label">3. SPEED</label>
+      <input type="range" id="speedSlider" min="1" max="200" value="120" class="apple-input" />
+      <div style="font-size: 10px; color: var(--accent-blue); text-align: right; margin-top: 5px; font-weight: 800;" id="sp-val">120</div>
     </div>
 
     <div class="set-row">
-      <label class="set-label">3. METADATA</label>
+      <label class="set-label">4. SORT BY</label>
+      <select id="sortModeSelect" class="apple-select">
+        <option value="height">Height</option>
+        <option value="color">Color</option>
+      </select>
+    </div>
+
+    <div class="set-row">
+      <label class="set-label">5. METADATA</label>
       <p id="algorithmDescription" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;"></p>
     </div>
   </div>

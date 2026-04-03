@@ -13,8 +13,22 @@ export const radixSort = {
   async *generator(array) {
     const max = Math.max(...array);
     let exp = 1;
+    let pass = 1;
+
+    const digitLabel = (value) => {
+      if (value === 1) return 'ONES';
+      if (value === 10) return 'TENS';
+      if (value === 100) return 'HUNDREDS';
+      return `10^${Math.log10(value)}`;
+    };
 
     while (Math.floor(max / exp) > 0) {
+      yield {
+        type: 'phase',
+        label: `RADIX PASS ${pass}`,
+        context: `${digitLabel(exp)} DIGIT`,
+      };
+
       const output = new Array(array.length).fill(0);
       const count = new Array(10).fill(0);
 
@@ -41,6 +55,7 @@ export const radixSort = {
       }
 
       exp *= 10;
+      pass++;
     }
   }
 };

@@ -104,3 +104,25 @@ describe('Sorting Algorithms', () => {
     });
   }
 });
+
+describe('Value-based non-comparison behavior', () => {
+  it('radix sort emits one phase per significant digit of the actual values', async () => {
+    const arr = [999, 19, 239, 59, 419];
+    const gen = algorithms.radixSort.generator([...arr]);
+    const phaseLabels = [];
+
+    while (true) {
+      const { value, done } = await gen.next();
+      if (done) break;
+      if (value?.type === 'phase') {
+        phaseLabels.push(value.label);
+      }
+    }
+
+    expect(phaseLabels).toEqual([
+      'RADIX PASS 1',
+      'RADIX PASS 2',
+      'RADIX PASS 3',
+    ]);
+  });
+});

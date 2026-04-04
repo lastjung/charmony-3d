@@ -18,7 +18,8 @@ const state = {
   frameCount: 0,
   lastFpsSample: performance.now(),
   stepCount: 0,
-  phaseLabel: "READY",
+  phaseLabel: "Phase 1",
+  contextLabel: "READY",
   compareLabel: "-",
   isMuted: false,
   immersive: false,
@@ -188,7 +189,8 @@ function resetData() {
   data = shuffle(createValueSeries(state.nodeCount));
   nodePulseState = Array.from({ length: state.nodeCount }, () => ({ until: 0, strength: 0 }));
   state.stepCount = 0;
-  state.phaseLabel = "READY";
+  state.phaseLabel = "Phase 1";
+  state.contextLabel = "READY";
   state.compareLabel = "-";
   ui.hudTimer.textContent = "00:00:00";
   updateHud();
@@ -201,23 +203,23 @@ function getNodeGeometry() {
 }
 
 function getColorForValue(value) {
-  const sourceValue = state.activeCriterion === "color"
-    ? value
-    : (auxValues.get(value) ?? value);
+  const sourceValue = state.activeCriterion === "hue"
+    ? (auxValues.get(value) ?? value)
+    : value;
   const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
   return new THREE.Color().setHSL(0.08 + t * 0.76, 0.9, 0.56);
 }
 
 function getHeightForValue(value) {
-  const sourceValue = state.activeCriterion === "color"
-    ? (auxValues.get(value) ?? value)
-    : value;
+  const sourceValue = state.activeCriterion === "hue"
+    ? value
+    : (auxValues.get(value) ?? value);
   const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
   return 0.8 + t * (6 * state.elevation);
 }
 
 function getSortRuntime(criterion) {
-  const needsProxy = criterion === "color";
+  const needsProxy = criterion === "hue";
   return {
     workingArray: needsProxy ? data.map(v => auxValues.get(v)) : [...data],
     toDisplayData(workingArray) {
@@ -421,15 +423,99 @@ function updateHud() {
   ui.metaAlgorithm.textContent = fullAlgoName;
   ui.metaLayout.textContent = state.layout.toUpperCase();
   ui.metaShape.textContent = state.shape.toUpperCase();
-  ui.timelineLabel.textContent = state.phaseLabel;
+  ui.timelineLabel.textContent = state.contextLabel;
   ui.progressBar.style.width = `${Math.min(100, (state.stepCount / Math.max(1, state.nodeCount * 8)) * 100)}%`;
   ui.playBtn.textContent = state.playing ? "Pause" : "Play";
   ui.muteBtn.textContent = state.isMuted ? "Muted" : "Mute";
   ui.fullscreenBtn.textContent = state.immersive ? "Exit" : "Full";
   ui.hudAlgorithm.textContent = fullAlgoName;
-  ui.hudStep.textContent = String(state.stepCount);
-  ui.hudContext.textContent = state.phaseLabel;
+  ui.hudStep.textContent = state.phaseLabel;
+  ui.hudContext.textContent = state.contextLabel;
   ui.hudDetail.textContent = state.compareLabel === "-" ? "-" : state.compareLabel;
+}
+
+function createPhaseTracker(algorithmKey) {
+  return {
+    algorithmKey,
+    phaseNumber: 1,
+    detail: "None",
+    lastFocus: [],
+  };
+}
+
+function updateImplicitPhase(tracker, event) {
+  const [left = -1, right = -1] = event.indices;
+  const [prevLeft = -1, prevRight = -1] = tracker.lastFocus;
+
+  if (tracker.algorithmKey === "bubbleSort" || tracker.algorithmKey === "cocktailShakerSort") {
+    if (left === 0 && right === 1 && prevLeft > 0) {
+      tracker.phaseNumber += 1;
+    }
+    tracker.detail = `n-${tracker.phaseNumber}`;
+  } else if (tracker.algorithmKey === "selectionSort") {
+    if (right >= 0 && prevRight >= 0 && right < prevRight) {
+      tracker.phaseNumber += 1;
+    }
+    tracker.detail = `Select ${tracker.phaseNumber}`;
+  } else if (tracker.algorithmKey === "insertionSort") {
+    if (right > prevRight && prevRight >= 0) {
+      tracker.phaseNumber += 1;
+    }
+    tracker.detail = `Insert ${Math.min(state.nodeCount, tracker.phaseNumber + 1)}`;
+  } else {
+    tracker.detail = tracker.detail || "None";
+  }
+
+  tracker.lastFocus = [...event.indices];
+}
+
+function formatPhaseLabel(event) {
+  const phaseNumber = Number.parseInt(
+    event?.meta?.phaseNumber
+      ?? (String(event?.label || "").match(/(\d+)/)?.[1] ?? ""),
+    10
+  );
+  return Number.isFinite(phaseNumber) ? `Phase ${phaseNumber}` : "Phase";
+}
+
+function formatPhaseDetail(event) {
+  const context = String(event?.context || "").trim();
+  if (context) {
+    const normalized = context.toUpperCase();
+    if (normalized.includes("ONES")) return "1's digit";
+    if (normalized.includes("TENS")) return "10's digit";
+    if (normalized.includes("HUNDREDS")) return "100's digit";
+    return context.toLowerCase();
+  }
+  const label = String(event?.label || "").trim();
+  return label || "-";
+}
+
+function calcPhaseDisplay(tracker, event) {
+  if (event.kind === "phase") {
+    const phaseNumber = Number.parseInt(
+      event?.meta?.phaseNumber
+        ?? (String(event?.label || "").match(/(\d+)/)?.[1] ?? ""),
+      10
+    );
+    tracker.phaseNumber = Number.isFinite(phaseNumber) ? phaseNumber : tracker.phaseNumber;
+    tracker.detail = formatPhaseDetail(event);
+    return {
+      label: `${formatPhaseLabel(event)}: ${tracker.detail}`,
+      detail: tracker.detail,
+    };
+  }
+
+  if (event.kind === "focus" || event.kind === "move") {
+    updateImplicitPhase(tracker, event);
+  }
+
+  return {
+    label: tracker.detail && tracker.detail !== "None"
+      ? `Phase ${tracker.phaseNumber}: ${tracker.detail}`
+      : `Phase ${tracker.phaseNumber}`,
+    detail: tracker.detail || "None",
+  };
 }
 
 async function waitWithCancel(ms, sessionId) {
@@ -449,7 +535,9 @@ function setImmersive(nextValue) {
 
 async function runSort() {
   const sessionId = ++sortSession;
+  const phaseTracker = createPhaseTracker(state.algorithmKey);
   state.playing = true;
+  state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
   runStartedAt = performance.now();
   updateHud();
 
@@ -462,25 +550,29 @@ async function runSort() {
 
     data = runtime.toDisplayData(runtime.workingArray);
     const event = normalizeSortStep(rawStep);
+    const phaseDisplay = calcPhaseDisplay(phaseTracker, event);
     state.stepCount += 1;
+    state.phaseLabel = phaseDisplay.label;
     if (event.kind === "phase") {
-      state.phaseLabel = rawStep.context || rawStep.label || "PHASE";
-      state.compareLabel = "-";
+      state.contextLabel = "PHASE";
+      state.compareLabel = phaseDisplay.detail;
       highlightIndices([]);
     } else if (event.kind === "focus") {
-      state.phaseLabel = "SCAN";
+      state.contextLabel = "SCAN";
       state.compareLabel = event.indices.length >= 2
         ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
         : `${event.indices[0] + 1}`;
       highlightIndices(event.indices, "focus");
     } else if (event.kind === "move") {
-      state.phaseLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
+      state.contextLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
       state.compareLabel = event.indices.length >= 2
         ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
         : `${event.indices[0] + 1}`;
       highlightIndices(event.indices, "move");
       const [fromIndex = -1, toIndex = fromIndex] = event.indices;
       await animateSwap(fromIndex, toIndex);
+    } else {
+      state.contextLabel = "RUN";
     }
 
     updateHud();
@@ -491,13 +583,13 @@ async function runSort() {
     data = runtime.toDisplayData(runtime.workingArray);
     state.playing = false;
     elapsedBeforePause = 0;
-    state.phaseLabel = "COMPLETE";
+    state.contextLabel = "COMPLETE";
     highlightIndices([]);
     syncNodes();
     updateHud();
 
     if (state.sortCriterion === "all" && state.activeCriterion === "height") {
-      state.phaseLabel = "NEXT";
+      state.contextLabel = "NEXT";
       state.compareLabel = "COLOR IN 2.0s";
       updateHud();
 
@@ -505,12 +597,12 @@ async function runSort() {
       if (!canContinue || sessionId !== sortSession) return;
 
       state.compareLabel = "-";
-      state.phaseLabel = "READY";
+      state.contextLabel = "READY";
       await runSort();
       return;
     }
 
-    if (state.sortCriterion === "all" && state.activeCriterion === "color") {
+    if (state.sortCriterion === "all" && state.activeCriterion === "hue") {
       state.activeCriterion = "height";
       updateHud();
     }
@@ -548,13 +640,18 @@ function toggleShape(nextShape) {
 function bindUi() {
   ui.algorithmSelect.addEventListener("change", () => {
     state.algorithmKey = ui.algorithmSelect.value;
-    state.phaseLabel = "READY";
+    state.phaseLabel = "Phase 1";
+    state.contextLabel = "READY";
     updateHud();
   });
 
   ui.sortCriterion.addEventListener("change", () => {
     const nextValue = ui.sortCriterion.value;
-    state.sortCriterion = nextValue === "color" || nextValue === "all" ? nextValue : "height";
+    state.sortCriterion = nextValue === "hue" || nextValue === "all" ? nextValue : "height";
+    if (!state.playing) {
+      state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+      syncNodes();
+    }
     updateHud();
   });
 
@@ -694,64 +791,6 @@ window.addEventListener("resize", () => {
 populateAlgorithms();
 bindUi();
 buildAuxValues();
-resetData();
-rebuildNodes();
-updateHud();
-animate(performance.now());
-  ui.speedDownBtn.addEventListener("click", () => {
-    state.speed = Math.max(1, state.speed - 10);
-    ui.speed.value = String(state.speed);
-    updateHud();
-  });
-
-  ui.speedUpBtn.addEventListener("click", () => {
-    state.speed = Math.min(100, state.speed + 10);
-    ui.speed.value = String(state.speed);
-    updateHud();
-  });
-
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.immersive) {
-      setImmersive(false);
-      return;
-    }
-    if (event.code === "Space") {
-      event.preventDefault();
-      ui.playBtn.click();
-    }
-  });
-}
-
-function animate(now) {
-  requestAnimationFrame(animate);
-  updateNodeGlow(now);
-  if (state.playing) {
-    const elapsed = elapsedBeforePause + (now - runStartedAt);
-    const totalSeconds = Math.floor(elapsed / 1000);
-    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-    const seconds = String(totalSeconds % 60).padStart(2, "0");
-    const hundredths = String(Math.floor((elapsed % 1000) / 10)).padStart(2, "0");
-    ui.hudTimer.textContent = `${minutes}:${seconds}:${hundredths}`;
-  }
-  state.frameCount += 1;
-  if (now - state.lastFpsSample > 500) {
-    const fps = Math.round((state.frameCount * 1000) / (now - state.lastFpsSample));
-    ui.fpsLabel.textContent = `${fps} FPS`;
-    state.frameCount = 0;
-    state.lastFpsSample = now;
-  }
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-populateAlgorithms();
-bindUi();
 resetData();
 rebuildNodes();
 updateHud();

@@ -10,7 +10,7 @@ const state = {
   speed: 72,
   layout: "grid",
   shape: "rectangle",
-  sortKey: "height",
+  sortCriterion: "height",
   activeCriterion: "height",
   spacing: 1.2,
   elevation: 1,
@@ -20,17 +20,13 @@ const state = {
   stepCount: 0,
   phaseLabel: "READY",
   compareLabel: "-",
-  announceVisible: false,
-  announceKicker: "Sort 3D",
-  announceTitle: "Ready",
-  announceDetail: "Press Play",
   isMuted: false,
   immersive: false,
 };
 
 const ui = {
   algorithmSelect: document.getElementById("algorithm-select"),
-  sortKey: document.getElementById("sort-criterion"),
+  sortCriterion: document.getElementById("sort-criterion"),
   nodeCount: document.getElementById("node-count"),
   nodeCountValue: document.getElementById("node-count-value"),
   speed: document.getElementById("speed"),
@@ -62,10 +58,6 @@ const ui = {
   fullscreenBtn: document.getElementById("fullscreen-btn"),
   speedDownBtn: document.getElementById("speed-down-btn"),
   speedUpBtn: document.getElementById("speed-up-btn"),
-  announce: document.getElementById("announce"),
-  announceKicker: document.getElementById("announce-kicker"),
-  announceTitle: document.getElementById("announce-title"),
-  announceDetail: document.getElementById("announce-detail"),
   layoutButtons: Array.from(document.querySelectorAll("[data-layout]")),
   shapeButtons: Array.from(document.querySelectorAll("[data-shape]")),
 };
@@ -120,13 +112,13 @@ ground.position.z = -0.05;
 scene.add(ground);
 
 let data = [];
+let auxValues = new Map();
+let reverseAuxValues = new Map();
 let nodeMeshes = [];
 let sortSession = 0;
 let nodePulseState = [];
 let runStartedAt = 0;
 let elapsedBeforePause = 0;
-const SORT_START_ANNOUNCE_MS = 3000;
-const SORT_STAGE_TRANSITION_MS = 2000;
 
 const baseMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.32,
@@ -168,21 +160,8 @@ function playNote(value, isMove = false) {
   osc.stop(audioCtx.currentTime + (isMove ? 0.28 : 0.1));
 }
 
-function getNoteValue(node) {
-  if (!node) return 1;
-  if (state.activeCriterion === "hue") {
-    return 1 + Math.round((node.hue / 359) * Math.max(0, state.nodeCount - 1));
-  }
-  return node.height;
-}
-
 function createValueSeries(count) {
   return Array.from({ length: count }, (_, index) => index + 1);
-}
-
-function createHueSeries(count) {
-  if (count <= 1) return [0];
-  return Array.from({ length: count }, (_, index) => Math.round((index * 359) / (count - 1)));
 }
 
 function shuffle(values) {
@@ -194,18 +173,19 @@ function shuffle(values) {
   return next;
 }
 
-function createNodes(count = state.nodeCount) {
-  const heights = shuffle(createValueSeries(count));
-  const hues = shuffle(createHueSeries(count));
-  return Array.from({ length: count }, (_, index) => ({
-    id: index + 1,
-    height: heights[index],
-    hue: hues[index],
-  }));
+function buildAuxValues() {
+  const shuffled = shuffle(createValueSeries(state.nodeCount));
+  auxValues = new Map();
+  reverseAuxValues = new Map();
+  const values = createValueSeries(state.nodeCount);
+  for (let i = 0; i < values.length; i++) {
+    auxValues.set(values[i], shuffled[i]);
+    reverseAuxValues.set(shuffled[i], values[i]);
+  }
 }
 
 function resetData() {
-  data = createNodes(state.nodeCount);
+  data = shuffle(createValueSeries(state.nodeCount));
   nodePulseState = Array.from({ length: state.nodeCount }, () => ({ until: 0, strength: 0 }));
   state.stepCount = 0;
   state.phaseLabel = "READY";
@@ -220,22 +200,28 @@ function getNodeGeometry() {
     : new THREE.BoxGeometry(0.58, 0.44, 1);
 }
 
-function getColorForNode(node) {
-  const t = Math.max(0, Math.min(1, (node?.hue ?? 0) / 359));
-  return new THREE.Color().setHSL(t, 0.9, 0.56);
+function getColorForValue(value) {
+  const sourceValue = state.activeCriterion === "color"
+    ? value
+    : (auxValues.get(value) ?? value);
+  const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
+  return new THREE.Color().setHSL(0.08 + t * 0.76, 0.9, 0.56);
 }
 
-function getHeightForNode(node) {
-  const t = state.nodeCount <= 1 ? 0 : ((node?.height ?? 1) - 1) / (state.nodeCount - 1);
+function getHeightForValue(value) {
+  const sourceValue = state.activeCriterion === "color"
+    ? (auxValues.get(value) ?? value)
+    : value;
+  const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
   return 0.8 + t * (6 * state.elevation);
 }
 
-function getSortRuntime(sortKey) {
-  const nodesByKey = new Map(data.map((node) => [node[sortKey], node]));
+function getSortRuntime(criterion) {
+  const needsProxy = criterion === "color";
   return {
-    workingArray: data.map((node) => node[sortKey]),
+    workingArray: needsProxy ? data.map(v => auxValues.get(v)) : [...data],
     toDisplayData(workingArray) {
-      return workingArray.map((value) => nodesByKey.get(value));
+      return needsProxy ? workingArray.map(v => reverseAuxValues.get(v)) : [...workingArray];
     },
   };
 }
@@ -278,9 +264,9 @@ function getLayoutPosition(index, count = state.nodeCount) {
   );
 }
 
-function applyNodeTransform(mesh, index, node, instant = false) {
+function applyNodeTransform(mesh, index, value, instant = false) {
   const base = getLayoutPosition(index);
-  const height = getHeightForNode(node);
+  const height = getHeightForValue(value);
 
   if (state.layout === "grid") {
     mesh.position.set(base.x, base.y, height / 2);
@@ -297,7 +283,7 @@ function applyNodeTransform(mesh, index, node, instant = false) {
     mesh.lookAt(mesh.position.clone().add(normal));
   }
 
-  mesh.material.color.copy(getColorForNode(node));
+  mesh.material.color.copy(getColorForValue(value));
   mesh.material.emissive.copy(mesh.material.color).multiplyScalar(0.04);
 
   if (instant) {
@@ -314,9 +300,9 @@ function rebuildNodes() {
   nodeMeshes = [];
 
   const geometry = getNodeGeometry();
-  data.forEach((node, index) => {
+  data.forEach((value, index) => {
     const mesh = new THREE.Mesh(geometry.clone(), baseMaterial.clone());
-    applyNodeTransform(mesh, index, node, true);
+    applyNodeTransform(mesh, index, value, true);
     scene.add(mesh);
     nodeMeshes.push(mesh);
   });
@@ -367,14 +353,14 @@ function highlightIndices(indices = [], kind = "focus") {
   spreadGridTrail(valid);
 
   if (valid.length > 0) {
-    playNote(getNoteValue(data[valid[0]]), kind === "move");
+    playNote(data[valid[0]], kind === "move");
   }
 }
 
 function updateNodeGlow(now) {
   nodeMeshes.forEach((mesh, index) => {
-    const node = data[index];
-    const color = getColorForNode(node);
+    const value = data[index];
+    const color = getColorForValue(value);
     const pulse = nodePulseState[index];
     const duration = pulse ? Math.max(1, pulse.until - pulse.startedAt) : 1;
     const remaining = pulse ? pulse.until - now : 0;
@@ -444,24 +430,6 @@ function updateHud() {
   ui.hudStep.textContent = String(state.stepCount);
   ui.hudContext.textContent = state.phaseLabel;
   ui.hudDetail.textContent = state.compareLabel === "-" ? "-" : state.compareLabel;
-  ui.announce.classList.toggle("visible", state.announceVisible);
-  ui.announceKicker.textContent = state.announceKicker;
-  ui.announceTitle.textContent = state.announceTitle;
-  ui.announceDetail.textContent = state.announceDetail;
-}
-
-function showAnnouncement(title, detail = "", kicker = "Sort 3D") {
-  state.announceVisible = true;
-  state.announceKicker = kicker;
-  state.announceTitle = title;
-  state.announceDetail = detail;
-  updateHud();
-}
-
-function hideAnnouncement() {
-  if (!state.announceVisible) return;
-  state.announceVisible = false;
-  updateHud();
 }
 
 async function waitWithCancel(ms, sessionId) {
@@ -481,111 +449,69 @@ function setImmersive(nextValue) {
 
 async function runSort() {
   const sessionId = ++sortSession;
-  const showMultiPassAnnouncements = state.sortKey === "all";
   state.playing = true;
   runStartedAt = performance.now();
   updateHud();
 
-  const algo = algorithms[state.algorithmKey];
-  const criteriaQueue = state.sortKey === "all" ? ["height", "hue"] : [state.sortKey];
-
-  for (let i = 0; i < criteriaQueue.length; i++) {
+  // Use the chosen sort criterion for the algorithm, but keep existing activeCriterion for visuals.
+  const chosenCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+  const runtime = getSortRuntime(chosenCriterion);
+  const generator = algorithms[state.algorithmKey].generator(runtime.workingArray);
+  for await (const rawStep of generator) {
     if (sessionId !== sortSession || !state.playing) break;
 
-    const currentLogicCriterion = criteriaQueue[i];
-    const runtime = getSortRuntime(currentLogicCriterion);
-    const generator = algo.generator(runtime.workingArray);
-
-    state.activeCriterion = currentLogicCriterion;
-    state.phaseLabel = `Sorting ${algo.name} by ${currentLogicCriterion.toUpperCase()}`;
-    state.compareLabel = "-";
-    syncNodes();
-    if (showMultiPassAnnouncements && i === 0) {
-      showAnnouncement(
-        algo.name,
-        `Sort by ${currentLogicCriterion.toUpperCase()}`,
-        "Starting"
-      );
-    } else {
-      updateHud();
-    }
-
-    if (showMultiPassAnnouncements && i === 0) {
-      setTimeout(() => {
-        if (sessionId === sortSession) hideAnnouncement();
-      }, SORT_START_ANNOUNCE_MS);
-    }
-
-    for await (const rawStep of generator) {
-      if (sessionId !== sortSession || !state.playing) break;
-
-      data = runtime.toDisplayData(runtime.workingArray);
-      const event = normalizeSortStep(rawStep);
-      state.stepCount += 1;
-      
-      if (event.kind === "phase") {
-        state.phaseLabel = rawStep.context || rawStep.label || "PHASE";
-        state.compareLabel = "-";
-        highlightIndices([]);
-      } else if (event.kind === "focus") {
-        state.phaseLabel = "SCAN";
-        state.compareLabel = event.indices.length >= 2
-          ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
-          : `${event.indices[0] + 1}`;
-        highlightIndices(event.indices, "focus");
-      } else if (event.kind === "move") {
-        state.phaseLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
-        state.compareLabel = event.indices.length >= 2
-          ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
-          : `${event.indices[0] + 1}`;
-        highlightIndices(event.indices, "move");
-        const [fromIndex = -1, toIndex = fromIndex] = event.indices;
-        await animateSwap(fromIndex, toIndex);
-      }
-
-      updateHud();
-      await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
-    }
-
-    if (showMultiPassAnnouncements && i < criteriaQueue.length - 1 && sessionId === sortSession && state.playing) {
-      const nextLabel = criteriaQueue[i + 1].toUpperCase();
-
-      state.phaseLabel = "Complete";
-      state.compareLabel = `Next: ${algo.name} by ${nextLabel}`;
-      showAnnouncement(
-        "Complete",
-        `Next: Sort by ${nextLabel}`,
-        "Transition"
-      );
-
-      const canContinue = await waitWithCancel(SORT_STAGE_TRANSITION_MS, sessionId);
-      if (!canContinue) break;
-
-      state.activeCriterion = criteriaQueue[i + 1];
-      state.stepCount = 0;
-      state.phaseLabel = "READY";
+    data = runtime.toDisplayData(runtime.workingArray);
+    const event = normalizeSortStep(rawStep);
+    state.stepCount += 1;
+    if (event.kind === "phase") {
+      state.phaseLabel = rawStep.context || rawStep.label || "PHASE";
       state.compareLabel = "-";
-      syncNodes();
-      hideAnnouncement();
-      updateHud();
+      highlightIndices([]);
+    } else if (event.kind === "focus") {
+      state.phaseLabel = "SCAN";
+      state.compareLabel = event.indices.length >= 2
+        ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
+        : `${event.indices[0] + 1}`;
+      highlightIndices(event.indices, "focus");
+    } else if (event.kind === "move") {
+      state.phaseLabel = event.indices[0] === event.indices[1] ? "WRITE" : "MOVE";
+      state.compareLabel = event.indices.length >= 2
+        ? `${event.indices[0] + 1} ↔ ${event.indices[1] + 1}`
+        : `${event.indices[0] + 1}`;
+      highlightIndices(event.indices, "move");
+      const [fromIndex = -1, toIndex = fromIndex] = event.indices;
+      await animateSwap(fromIndex, toIndex);
     }
+
+    updateHud();
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
   }
 
   if (sessionId === sortSession) {
+    data = runtime.toDisplayData(runtime.workingArray);
     state.playing = false;
     elapsedBeforePause = 0;
     state.phaseLabel = "COMPLETE";
-    state.compareLabel = "-";
     highlightIndices([]);
     syncNodes();
-    if (showMultiPassAnnouncements) {
-      showAnnouncement("COMPLETE", `${algo.name} finished`, "Final");
-      const canFinish = await waitWithCancel(SORT_STAGE_TRANSITION_MS, sessionId);
-      if (canFinish && sessionId === sortSession) {
-        hideAnnouncement();
-      }
-    } else {
-      hideAnnouncement();
+    updateHud();
+
+    if (state.sortCriterion === "all" && state.activeCriterion === "height") {
+      state.phaseLabel = "NEXT";
+      state.compareLabel = "COLOR IN 2.0s";
+      updateHud();
+
+      const canContinue = await waitWithCancel(2000, sessionId);
+      if (!canContinue || sessionId !== sortSession) return;
+
+      state.compareLabel = "-";
+      state.phaseLabel = "READY";
+      await runSort();
+      return;
+    }
+
+    if (state.sortCriterion === "all" && state.activeCriterion === "color") {
+      state.activeCriterion = "height";
       updateHud();
     }
   }
@@ -623,22 +549,18 @@ function bindUi() {
   ui.algorithmSelect.addEventListener("change", () => {
     state.algorithmKey = ui.algorithmSelect.value;
     state.phaseLabel = "READY";
-    hideAnnouncement();
     updateHud();
   });
 
-  ui.sortKey.addEventListener("change", () => {
-    const nextValue = ui.sortKey.value;
-    state.sortKey = nextValue === "hue" || nextValue === "all" ? nextValue : "height";
-    if (!state.playing) {
-      state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
-      syncNodes();
-    }
+  ui.sortCriterion.addEventListener("change", () => {
+    const nextValue = ui.sortCriterion.value;
+    state.sortCriterion = nextValue === "color" || nextValue === "all" ? nextValue : "height";
     updateHud();
   });
 
   ui.nodeCount.addEventListener("input", () => {
     state.nodeCount = Number.parseInt(ui.nodeCount.value, 10);
+    buildAuxValues();
     resetData();
     rebuildNodes();
   });
@@ -673,9 +595,9 @@ function bindUi() {
     sortSession += 1;
     state.playing = false;
     elapsedBeforePause = 0;
-    state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
+    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+    buildAuxValues();
     resetData();
-    hideAnnouncement();
     syncNodes();
   });
 
@@ -684,9 +606,8 @@ function bindUi() {
     sortSession += 1;
     state.playing = false;
     elapsedBeforePause = 0;
-    state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
+    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
     resetData();
-    hideAnnouncement();
     syncNodes();
   });
 
@@ -696,7 +617,6 @@ function bindUi() {
       elapsedBeforePause += performance.now() - runStartedAt;
       state.playing = false;
       sortSession += 1;
-      hideAnnouncement();
       updateHud();
       return;
     }
@@ -719,6 +639,65 @@ function bindUi() {
     setImmersive(!state.immersive);
   });
 
+  ui.speedDownBtn.addEventListener("click", () => {
+    state.speed = Math.max(1, state.speed - 10);
+    ui.speed.value = String(state.speed);
+    updateHud();
+  });
+
+  ui.speedUpBtn.addEventListener("click", () => {
+    state.speed = Math.min(100, state.speed + 10);
+    ui.speed.value = String(state.speed);
+    updateHud();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.immersive) {
+      setImmersive(false);
+      return;
+    }
+    if (event.code === "Space") {
+      event.preventDefault();
+      ui.playBtn.click();
+    }
+  });
+}
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  updateNodeGlow(now);
+  if (state.playing) {
+    const elapsed = elapsedBeforePause + (now - runStartedAt);
+    const totalSeconds = Math.floor(elapsed / 1000);
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    const hundredths = String(Math.floor((elapsed % 1000) / 10)).padStart(2, "0");
+    ui.hudTimer.textContent = `${minutes}:${seconds}:${hundredths}`;
+  }
+  state.frameCount += 1;
+  if (now - state.lastFpsSample > 500) {
+    const fps = Math.round((state.frameCount * 1000) / (now - state.lastFpsSample));
+    ui.fpsLabel.textContent = `${fps} FPS`;
+    state.frameCount = 0;
+    state.lastFpsSample = now;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+populateAlgorithms();
+bindUi();
+buildAuxValues();
+resetData();
+rebuildNodes();
+updateHud();
+animate(performance.now());
   ui.speedDownBtn.addEventListener("click", () => {
     state.speed = Math.max(1, state.speed - 10);
     ui.speed.value = String(state.speed);

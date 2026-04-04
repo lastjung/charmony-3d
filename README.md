@@ -18,3 +18,9 @@ View your app in AI Studio: https://ai.studio/apps/02e7c334-777e-4ce6-9525-7fc6c
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Three.js Experiments
+A local collection of classic Three.js visual experiments (cloned from [bobbyroe/Three-Experiments](https://github.com/bobbyroe/Three-Experiments)).
+
+- **Portal:** [threejs-exp/index.html](./threejs-exp/index.html)
+- **Live Demo:** [bobbyroe.github.io/Three-Experiments/](http://bobbyroe.github.io/Three-Experiments/)

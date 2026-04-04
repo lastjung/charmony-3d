@@ -478,7 +478,7 @@
   <aside class="panel left">
     <div class="eyebrow">Sorting Info</div>
     <h1>Algorithm Engine</h1>
-    <p class="subtle">정렬 알고리즘은 1차원 배열을 유지하고, 공간 배치는 별도로 바꿉니다. 현재 색은 추가 정보이고 높이가 주값입니다.</p>
+    <p class="subtle">정렬 알고리즘은 각 노드의 key 값을 기준으로 동작하고, 공간 배치는 별도로 바꿉니다. 현재 key는 height 또는 hue 입니다.</p>
 
     <div class="field">
       <label for="algorithm-select"><span>Algorithm</span></label>
@@ -489,7 +489,7 @@
       <label for="sort-criterion"><span>Sort By</span></label>
       <select id="sort-criterion">
         <option value="height">Height</option>
-        <option value="color">Color</option>
+        <option value="hue">Hue</option>
         <option value="all">All</option>
       </select>
     </div>
@@ -558,8 +558,8 @@
 
     <div class="stats">
       <div class="stat">
-        <div class="stat-label">Color Channel</div>
-        <div class="stat-value">AUX</div>
+        <div class="stat-label">Hue Channel</div>
+        <div class="stat-value">DIRECT</div>
       </div>
       <div class="stat">
         <div class="stat-label">Camera</div>

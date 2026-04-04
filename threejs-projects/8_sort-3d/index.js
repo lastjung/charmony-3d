@@ -10,7 +10,7 @@ const state = {
   speed: 72,
   layout: "grid",
   shape: "rectangle",
-  sortCriterion: "height",
+  sortKey: "height",
   activeCriterion: "height",
   spacing: 1.2,
   elevation: 1,
@@ -30,7 +30,7 @@ const state = {
 
 const ui = {
   algorithmSelect: document.getElementById("algorithm-select"),
-  sortCriterion: document.getElementById("sort-criterion"),
+  sortKey: document.getElementById("sort-criterion"),
   nodeCount: document.getElementById("node-count"),
   nodeCountValue: document.getElementById("node-count-value"),
   speed: document.getElementById("speed"),
@@ -120,14 +120,12 @@ ground.position.z = -0.05;
 scene.add(ground);
 
 let data = [];
-let auxValues = new Map();
-let reverseAuxValues = new Map();
 let nodeMeshes = [];
 let sortSession = 0;
 let nodePulseState = [];
 let runStartedAt = 0;
 let elapsedBeforePause = 0;
-const SORT_START_ANNOUNCE_MS = 1200;
+const SORT_START_ANNOUNCE_MS = 3000;
 const SORT_STAGE_TRANSITION_MS = 2000;
 
 const baseMaterial = new THREE.MeshStandardMaterial({
@@ -170,8 +168,21 @@ function playNote(value, isMove = false) {
   osc.stop(audioCtx.currentTime + (isMove ? 0.28 : 0.1));
 }
 
+function getNoteValue(node) {
+  if (!node) return 1;
+  if (state.activeCriterion === "hue") {
+    return 1 + Math.round((node.hue / 359) * Math.max(0, state.nodeCount - 1));
+  }
+  return node.height;
+}
+
 function createValueSeries(count) {
   return Array.from({ length: count }, (_, index) => index + 1);
+}
+
+function createHueSeries(count) {
+  if (count <= 1) return [0];
+  return Array.from({ length: count }, (_, index) => Math.round((index * 359) / (count - 1)));
 }
 
 function shuffle(values) {
@@ -183,19 +194,18 @@ function shuffle(values) {
   return next;
 }
 
-function buildAuxValues() {
-  const shuffled = shuffle(createValueSeries(state.nodeCount));
-  auxValues = new Map();
-  reverseAuxValues = new Map();
-  const values = createValueSeries(state.nodeCount);
-  for (let i = 0; i < values.length; i++) {
-    auxValues.set(values[i], shuffled[i]);
-    reverseAuxValues.set(shuffled[i], values[i]);
-  }
+function createNodes(count = state.nodeCount) {
+  const heights = shuffle(createValueSeries(count));
+  const hues = shuffle(createHueSeries(count));
+  return Array.from({ length: count }, (_, index) => ({
+    id: index + 1,
+    height: heights[index],
+    hue: hues[index],
+  }));
 }
 
 function resetData() {
-  data = shuffle(createValueSeries(state.nodeCount));
+  data = createNodes(state.nodeCount);
   nodePulseState = Array.from({ length: state.nodeCount }, () => ({ until: 0, strength: 0 }));
   state.stepCount = 0;
   state.phaseLabel = "READY";
@@ -210,28 +220,22 @@ function getNodeGeometry() {
     : new THREE.BoxGeometry(0.58, 0.44, 1);
 }
 
-function getColorForValue(value) {
-  const sourceValue = state.activeCriterion === "color"
-    ? value
-    : (auxValues.get(value) ?? value);
-  const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
-  return new THREE.Color().setHSL(0.08 + t * 0.76, 0.9, 0.56);
+function getColorForNode(node) {
+  const t = Math.max(0, Math.min(1, (node?.hue ?? 0) / 359));
+  return new THREE.Color().setHSL(t, 0.9, 0.56);
 }
 
-function getHeightForValue(value) {
-  const sourceValue = state.activeCriterion === "color"
-    ? (auxValues.get(value) ?? value)
-    : value;
-  const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
+function getHeightForNode(node) {
+  const t = state.nodeCount <= 1 ? 0 : ((node?.height ?? 1) - 1) / (state.nodeCount - 1);
   return 0.8 + t * (6 * state.elevation);
 }
 
-function getSortRuntime(criterion) {
-  const needsProxy = criterion === "color";
+function getSortRuntime(sortKey) {
+  const nodesByKey = new Map(data.map((node) => [node[sortKey], node]));
   return {
-    workingArray: needsProxy ? data.map(v => auxValues.get(v)) : [...data],
+    workingArray: data.map((node) => node[sortKey]),
     toDisplayData(workingArray) {
-      return needsProxy ? workingArray.map(v => reverseAuxValues.get(v)) : [...workingArray];
+      return workingArray.map((value) => nodesByKey.get(value));
     },
   };
 }
@@ -274,9 +278,9 @@ function getLayoutPosition(index, count = state.nodeCount) {
   );
 }
 
-function applyNodeTransform(mesh, index, value, instant = false) {
+function applyNodeTransform(mesh, index, node, instant = false) {
   const base = getLayoutPosition(index);
-  const height = getHeightForValue(value);
+  const height = getHeightForNode(node);
 
   if (state.layout === "grid") {
     mesh.position.set(base.x, base.y, height / 2);
@@ -293,7 +297,7 @@ function applyNodeTransform(mesh, index, value, instant = false) {
     mesh.lookAt(mesh.position.clone().add(normal));
   }
 
-  mesh.material.color.copy(getColorForValue(value));
+  mesh.material.color.copy(getColorForNode(node));
   mesh.material.emissive.copy(mesh.material.color).multiplyScalar(0.04);
 
   if (instant) {
@@ -310,9 +314,9 @@ function rebuildNodes() {
   nodeMeshes = [];
 
   const geometry = getNodeGeometry();
-  data.forEach((value, index) => {
+  data.forEach((node, index) => {
     const mesh = new THREE.Mesh(geometry.clone(), baseMaterial.clone());
-    applyNodeTransform(mesh, index, value, true);
+    applyNodeTransform(mesh, index, node, true);
     scene.add(mesh);
     nodeMeshes.push(mesh);
   });
@@ -363,14 +367,14 @@ function highlightIndices(indices = [], kind = "focus") {
   spreadGridTrail(valid);
 
   if (valid.length > 0) {
-    playNote(data[valid[0]], kind === "move");
+    playNote(getNoteValue(data[valid[0]]), kind === "move");
   }
 }
 
 function updateNodeGlow(now) {
   nodeMeshes.forEach((mesh, index) => {
-    const value = data[index];
-    const color = getColorForValue(value);
+    const node = data[index];
+    const color = getColorForNode(node);
     const pulse = nodePulseState[index];
     const duration = pulse ? Math.max(1, pulse.until - pulse.startedAt) : 1;
     const remaining = pulse ? pulse.until - now : 0;
@@ -477,12 +481,13 @@ function setImmersive(nextValue) {
 
 async function runSort() {
   const sessionId = ++sortSession;
+  const showMultiPassAnnouncements = state.sortKey === "all";
   state.playing = true;
   runStartedAt = performance.now();
   updateHud();
 
   const algo = algorithms[state.algorithmKey];
-  const criteriaQueue = state.sortCriterion === "all" ? ["height", "color"] : [state.sortCriterion];
+  const criteriaQueue = state.sortKey === "all" ? ["height", "hue"] : [state.sortKey];
 
   for (let i = 0; i < criteriaQueue.length; i++) {
     if (sessionId !== sortSession || !state.playing) break;
@@ -495,7 +500,7 @@ async function runSort() {
     state.phaseLabel = `Sorting ${algo.name} by ${currentLogicCriterion.toUpperCase()}`;
     state.compareLabel = "-";
     syncNodes();
-    if (i === 0) {
+    if (showMultiPassAnnouncements && i === 0) {
       showAnnouncement(
         algo.name,
         `Sort by ${currentLogicCriterion.toUpperCase()}`,
@@ -505,10 +510,10 @@ async function runSort() {
       updateHud();
     }
 
-    if (i === 0) {
-      const canStart = await waitWithCancel(SORT_START_ANNOUNCE_MS, sessionId);
-      if (!canStart || sessionId !== sortSession || !state.playing) break;
-      hideAnnouncement();
+    if (showMultiPassAnnouncements && i === 0) {
+      setTimeout(() => {
+        if (sessionId === sortSession) hideAnnouncement();
+      }, SORT_START_ANNOUNCE_MS);
     }
 
     for await (const rawStep of generator) {
@@ -542,7 +547,7 @@ async function runSort() {
       await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
     }
 
-    if (i < criteriaQueue.length - 1 && sessionId === sortSession && state.playing) {
+    if (showMultiPassAnnouncements && i < criteriaQueue.length - 1 && sessionId === sortSession && state.playing) {
       const nextLabel = criteriaQueue[i + 1].toUpperCase();
 
       state.phaseLabel = "Complete";
@@ -573,7 +578,16 @@ async function runSort() {
     state.compareLabel = "-";
     highlightIndices([]);
     syncNodes();
-    showAnnouncement("COMPLETE", `${algo.name} finished`, "Final");
+    if (showMultiPassAnnouncements) {
+      showAnnouncement("COMPLETE", `${algo.name} finished`, "Final");
+      const canFinish = await waitWithCancel(SORT_STAGE_TRANSITION_MS, sessionId);
+      if (canFinish && sessionId === sortSession) {
+        hideAnnouncement();
+      }
+    } else {
+      hideAnnouncement();
+      updateHud();
+    }
   }
 }
 
@@ -613,11 +627,11 @@ function bindUi() {
     updateHud();
   });
 
-  ui.sortCriterion.addEventListener("change", () => {
-    const nextValue = ui.sortCriterion.value;
-    state.sortCriterion = nextValue === "color" || nextValue === "all" ? nextValue : "height";
+  ui.sortKey.addEventListener("change", () => {
+    const nextValue = ui.sortKey.value;
+    state.sortKey = nextValue === "hue" || nextValue === "all" ? nextValue : "height";
     if (!state.playing) {
-      state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+      state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
       syncNodes();
     }
     updateHud();
@@ -625,7 +639,6 @@ function bindUi() {
 
   ui.nodeCount.addEventListener("input", () => {
     state.nodeCount = Number.parseInt(ui.nodeCount.value, 10);
-    buildAuxValues();
     resetData();
     rebuildNodes();
   });
@@ -660,8 +673,7 @@ function bindUi() {
     sortSession += 1;
     state.playing = false;
     elapsedBeforePause = 0;
-    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
-    buildAuxValues();
+    state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
     resetData();
     hideAnnouncement();
     syncNodes();
@@ -672,7 +684,7 @@ function bindUi() {
     sortSession += 1;
     state.playing = false;
     elapsedBeforePause = 0;
-    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+    state.activeCriterion = state.sortKey === "all" ? "height" : state.sortKey;
     resetData();
     hideAnnouncement();
     syncNodes();
@@ -761,7 +773,6 @@ window.addEventListener("resize", () => {
 
 populateAlgorithms();
 bindUi();
-buildAuxValues();
 resetData();
 rebuildNodes();
 updateHud();

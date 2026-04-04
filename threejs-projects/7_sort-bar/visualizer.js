@@ -92,8 +92,61 @@ let barMeshes = [];
 
 // Indicator dots group
 let indicatorGroup = null;
+let indicatorKeys = [];
 let activePhaseLabel = '';
 let activePhaseContext = '';
+
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach((material) => material.dispose());
+  });
+}
+
+function ensureIndicatorGroup() {
+  if (!indicatorGroup) {
+    indicatorGroup = new THREE.Group();
+    scene.add(indicatorGroup);
+  }
+}
+
+function createIndicatorKey() {
+  return new THREE.Mesh(
+    new THREE.BoxGeometry(BAR_WIDTH * 0.9, BAR_WIDTH * 0.18, BAR_WIDTH * 0.8),
+    new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
+      transparent: true,
+      opacity: 0.4
+    })
+  );
+}
+
+function syncIndicatorKeys() {
+  if (!scene) return;
+
+  ensureIndicatorGroup();
+
+  if (indicatorKeys.length !== barMeshes.length) {
+    disposeObject3D(indicatorGroup);
+    indicatorGroup.clear();
+    indicatorKeys = barMeshes.map(() => createIndicatorKey());
+    indicatorKeys.forEach((key) => indicatorGroup.add(key));
+  }
+
+  for (let i = 0; i < indicatorKeys.length; i++) {
+    const key = indicatorKeys[i];
+    if (!key) continue;
+
+    key.position.x = getBarX(i);
+    key.position.y = -MAX_HEIGHT / 2 - (BAR_WIDTH * 0.32);
+    key.position.z = 0;
+  }
+}
 
 function createSequentialValues() {
   return getSortableValues();
@@ -182,6 +235,7 @@ function rebuildBars() {
   barsGroup.clear();
   barMeshes = dataArray.map((value, index) => createBarMesh(value, index));
   for (const bar of barMeshes) barsGroup.add(bar);
+  syncIndicatorKeys();
 }
 
 function syncBarMeshesToData() {
@@ -326,13 +380,7 @@ export function initVisualizer(canvas) {
 }
 
 export function highlightComparedIndices(index1, index2) {
-  if (!indicatorGroup) {
-    indicatorGroup = new THREE.Group();
-    scene.add(indicatorGroup);
-  }
-
-  // Clear previous indicators
-  indicatorGroup.clear();
+  syncIndicatorKeys();
 
   const activeIndices = Array.from(new Set([index1, index2].filter(i => i >= 0 && i < barMeshes.length)));
 
@@ -368,21 +416,12 @@ export function highlightComparedIndices(index1, index2) {
     }
 
     // 2. 하단 보조 인디케이터 (건반 표시)
-    const keyGeometry = new THREE.BoxGeometry(BAR_WIDTH * 0.9, BAR_WIDTH * 0.18, BAR_WIDTH * 0.8);
-    const keyMaterial = new THREE.MeshStandardMaterial({
-      color: isActive ? 0xfff1a8 : 0x1a1a1a,
-      emissive: isActive ? 0xffea00 : 0x000000,
-      emissiveIntensity: isActive ? 0.6 : 0,
-      transparent: true,
-      opacity: isActive ? 1 : 0.4
-    });
-    const key = new THREE.Mesh(keyGeometry, keyMaterial);
-
-    key.position.x = getBarX(i);
-    key.position.y = -MAX_HEIGHT / 2 - (BAR_WIDTH * 0.32);
-    key.position.z = 0;
-
-    indicatorGroup.add(key);
+    const key = indicatorKeys[i];
+    if (!key) return;
+    key.material.color.setHex(isActive ? 0xfff1a8 : 0x1a1a1a);
+    key.material.emissive.setHex(isActive ? 0xffea00 : 0x000000);
+    key.material.emissiveIntensity = isActive ? 0.6 : 0;
+    key.material.opacity = isActive ? 1 : 0.4;
   });
 }
 
@@ -401,6 +440,7 @@ export function updateScaleAndBars() {
   const randomValue = dataArray[Math.floor(Math.random() * dataArray.length)];
   playSynthesizedNote(randomValue, getDataMaxValue(), true);
   syncBarMeshesToData();
+  syncIndicatorKeys();
 }
 
 export async function animateSwapIndices(index1, index2, duration = 220) {

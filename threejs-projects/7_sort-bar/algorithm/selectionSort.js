@@ -12,6 +12,7 @@ export const selectionSort = {
   async *generator(array) {
     const n = array.length;
     for (let i = 0; i < n - 1; i++) {
+      yield { type: 'phase', label: `Pass ${i + 1}`, context: `${n - i} nodes` };
       let minIdx = i;
       for (let j = i + 1; j < n; j++) {
         yield { type: 'compare', indices: [minIdx, j] };

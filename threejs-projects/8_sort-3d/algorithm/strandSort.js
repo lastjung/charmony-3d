@@ -16,16 +16,17 @@ export const strandSort = {
   spaceComplexity: 'O(n)',
 
   async *generator(array) {
+    const input = array.slice();
     const output = [];
 
-    while (array.length) {
+    while (input.length) {
       const strand = [];
-      strand.push(array.shift());
+      strand.push(input.shift());
 
-      for (let i = 0; i < array.length; ) {
-        yield { type: 'compare', indices: [i, -1] }; // -1 as placeholder
-        if (array[i] >= strand[strand.length - 1]) {
-          strand.push(array.splice(i, 1)[0]);
+      for (let i = 0; i < input.length; ) {
+        yield { type: 'compare', indices: [0, i + 1] };
+        if (input[i] >= strand[strand.length - 1]) {
+          strand.push(input.splice(i, 1)[0]);
         } else {
           i++;
         }
@@ -46,10 +47,13 @@ export const strandSort = {
 
       output.length = 0;
       for (const val of merged) output.push(val);
-    }
 
-    for (let i = 0; i < output.length; i++) {
-      array[i] = output[i];
+      for (let writeIndex = 0; writeIndex < output.length; writeIndex++) {
+        if (array[writeIndex] !== output[writeIndex]) {
+          array[writeIndex] = output[writeIndex];
+          yield { type: 'write', index: writeIndex };
+        }
+      }
     }
   }
 };

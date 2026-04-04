@@ -22,12 +22,16 @@ export const gravitySort = {
     const max = Math.max(...array);
     const beads = Array.from({ length: n }, () => new Array(max).fill(0));
 
+    yield { type: 'phase', label: 'GRAVITY SETUP', context: `${n} nodes` };
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < array[i]; j++) {
         beads[i][j] = 1;
       }
+      yield { type: 'write', index: i };
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
 
+    yield { type: 'phase', label: 'GRAVITY DROP', context: `${max} levels` };
     for (let j = 0; j < max; j++) {
       let sum = 0;
       for (let i = 0; i < n; i++) {
@@ -37,14 +41,20 @@ export const gravitySort = {
       for (let i = n - sum; i < n; i++) {
         beads[i][j] = 1;
       }
+      if (n > 1) {
+        yield { type: 'focus', indices: [Math.max(0, n - sum - 1), n - 1] };
+      }
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
 
+    yield { type: 'phase', label: 'GRAVITY WRITEBACK', context: `${n} nodes` };
     for (let i = 0; i < n; i++) {
       let count = 0;
       for (let j = 0; j < max; j++) {
         count += beads[i][j];
       }
       array[i] = count;
+      yield { type: 'write', index: i };
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   }

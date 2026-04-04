@@ -13,6 +13,7 @@ let countdownInterval = null;
 let roundStartData = [];
 let pausedAt = 0;
 let elapsedBeforePause = 0;
+let currentAllIndex = 0;
 
 // New HUD Variables
 let startTime = 0;
@@ -22,6 +23,7 @@ let autoCycle = false;
 let isMuted = false;
 const SPEED_MIN = 1;
 const SPEED_MAX = 200;
+const ALL_MODE_EXCLUDED_ALGORITHMS = new Set(['slowSort', 'stoogeSort']);
 
 // SVG Icons Constants
 const SVG_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
@@ -32,11 +34,54 @@ const SVG_MUTED = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2
 let currentPassLabel = '';
 let lastFocusIndices = [];
 let implicitPassNumber = 1;
+let resetElapsedOnNextSort = false;
+
+const announceEl = document.getElementById('announce');
+const announceKicker = document.getElementById('announce-kicker');
+const announceTitle = document.getElementById('announce-title');
+const announceDetail = document.getElementById('announce-detail');
+
+function showAnnounce(title, detail = '', kicker = 'Sort Visualizer', duration = 1200) {
+  if (!announceEl) return;
+  announceKicker.textContent = kicker;
+  announceTitle.textContent = title;
+  announceDetail.textContent = detail;
+  announceEl.classList.add('visible');
+  
+  if (duration > 0) {
+    setTimeout(() => {
+      announceEl.classList.remove('visible');
+    }, duration);
+  }
+}
+
+function hideAnnounce() {
+  if (announceEl) announceEl.classList.remove('visible');
+}
+
+function getAllAlgorithmKeys() {
+  return Object.keys(algorithms).filter((key) => !ALL_MODE_EXCLUDED_ALGORITHMS.has(key));
+}
+
+function isLastAlgorithmInAllMode() {
+  const keys = getAllAlgorithmKeys();
+  if (keys.length === 0) return true;
+  return currentAlgorithm === 'all' && currentAllIndex >= keys.length - 1;
+}
+
+function getPlayingAlgorithm() {
+  if (currentAlgorithm === 'all') {
+    const keys = getAllAlgorithmKeys();
+    return keys[currentAllIndex % keys.length];
+  }
+  return currentAlgorithm;
+}
 
 function updateHUDMeta() {
   const metaEl = document.getElementById('ui-meta');
   if (!metaEl) return;
-  const name = algorithms[currentAlgorithm]?.name || currentAlgorithm;
+  const playingKey = getPlayingAlgorithm();
+  const name = algorithms[playingKey]?.name || playingKey;
   metaEl.innerHTML = `<span class="top-algorithm">${name}</span>`;
 }
 
@@ -63,12 +108,13 @@ function isBubbleFamily(name) {
 
 function getImplicitPassLabel(event) {
   const nodeCount = dataArray.length;
+  const playingKey = getPlayingAlgorithm();
 
-  if (currentAlgorithm === 'radixSort') {
+  if (playingKey === 'radixSort') {
     return currentPassLabel || `Pass ${implicitPassNumber}: values`;
   }
 
-  if (currentAlgorithm === 'bubbleSort' && event.indices.length >= 2) {
+  if (playingKey === 'bubbleSort' && event.indices.length >= 2) {
     const [left, right] = event.indices;
     if (left === 0 && right === 1 && lastFocusIndices[0] > 0) {
       implicitPassNumber++;
@@ -94,7 +140,7 @@ function getImplicitPassLabel(event) {
     return `Pass ${implicitPassNumber}: ${Math.min(nodeCount, implicitPassNumber + 1)} nodes`;
   }
 
-  if (isBubbleFamily(currentAlgorithm)) {
+  if (isBubbleFamily(playingKey)) {
     const nodes = Math.max(1, nodeCount - (implicitPassNumber - 1));
     return `Pass ${implicitPassNumber}: ${nodes} nodes`;
   }
@@ -130,6 +176,13 @@ function resetPassTracking() {
   lastFocusIndices = [];
 }
 
+function scheduleElapsedReset() {
+  elapsedBeforePause = 0;
+  startTime = 0;
+  pausedAt = 0;
+  resetElapsedOnNextSort = false;
+}
+
 function updateFSMDisplay() {
   const el = document.getElementById('fsmStateDisplay');
   if (el) el.textContent = fsmState;
@@ -137,7 +190,8 @@ function updateFSMDisplay() {
 }
 
 function updateAlgorithmDescription() {
-  const desc = algorithms[currentAlgorithm]?.description || '';
+  const playingKey = getPlayingAlgorithm();
+  const desc = algorithms[playingKey]?.description || '';
   document.getElementById('algorithmDescription').textContent = desc;
 }
 
@@ -164,11 +218,23 @@ function formatTime(ms) {
 function updateHUD() {
   const timerEl = document.getElementById('ui-timer');
   if (!timerEl) return;
+  
+  let totalMs = elapsedBeforePause;
   if (fsmState === 'SORTING') {
-    timerEl.textContent = formatTime(elapsedBeforePause + (Date.now() - startTime));
-  } else if (fsmState === 'PAUSED') {
-    timerEl.textContent = formatTime(elapsedBeforePause);
+    totalMs += (Date.now() - startTime);
   }
+  
+  // Calculate ETA for current algorithm
+  const currentDelay = getStepDelay();
+  // Crude estimation: steps remaining * (delay + small rendering overhead)
+  const remainingSteps = Math.max(0, totalStepsEstimate - stepCount);
+  const estRemainingMs = remainingSteps * (currentDelay + 10); 
+  const totalExpectedMs = totalMs + estRemainingMs;
+
+  const currentStr = formatTime(totalMs);
+  const etaStr = formatTime(totalExpectedMs);
+  
+  timerEl.innerHTML = `${currentStr} <span style="opacity: 0.5; font-size: 0.85em; margin-left: 4px;">/ ETA ${etaStr}</span>`;
 }
 
 function getStepDelay() {
@@ -180,7 +246,8 @@ function getSwapDuration() {
 }
 
 function getAlgorithmGenerator() {
-  const algo = algorithms[currentAlgorithm];
+  const playingKey = getPlayingAlgorithm();
+  const algo = algorithms[playingKey];
   const n = dataArray.length;
   if (algo.isSlow) totalStepsEstimate = n * n * 0.5;
   else totalStepsEstimate = n * Math.log2(n) * 4;
@@ -192,10 +259,17 @@ function getAlgorithmGenerator() {
 
 async function sortLoop() {
   const sessionId = sortSessionId;
+  if (resetElapsedOnNextSort || currentAlgorithm !== 'all') {
+    scheduleElapsedReset();
+  }
   const sorter = getAlgorithmGenerator();
-  elapsedBeforePause = 0;
   pausedAt = 0;
   startTime = Date.now();
+  
+  const playingKey = getPlayingAlgorithm();
+  const algoName = algorithms[playingKey]?.name || playingKey;
+  showAnnounce(algoName, 'Starting sort', 'Algorithm Engine', 1000);
+  
   setHUDStep(currentPassLabel, 'Starting sort', 'phase');
   for await (const step of sorter) {
     if (cancelRequested || sessionId !== sortSessionId) break;
@@ -236,9 +310,18 @@ async function sortLoop() {
   setVisualizationPhase(null);
   sortLoopPromise = null;
   if (!cancelRequested) {
+    // Record elapsed time for the round before moving to next state
+    elapsedBeforePause += (Date.now() - startTime);
+    startTime = 0;
+
     setHUDStep(currentPassLabel, 'Sort complete', 'phase');
-    if (autoCycle) transitionTo('COUNTDOWN');
-    else transitionTo('STOPPED');
+    if (currentAlgorithm === 'all' && isLastAlgorithmInAllMode()) {
+      transitionTo('STOPPED');
+    } else if (autoCycle || currentAlgorithm === 'all') {
+      transitionTo('COUNTDOWN');
+    } else {
+      transitionTo('STOPPED');
+    }
   }
 }
 
@@ -264,7 +347,8 @@ function transitionTo(newState) {
     const isResuming = previousState === 'PAUSED' && sortLoopPromise != null && pausedAt > 0;
     cancelRequested = false;
     if (isResuming) {
-      elapsedBeforePause += Date.now() - pausedAt;
+      // startTime should be reset to current to only count active time
+      startTime = Date.now();
       pausedAt = 0;
     } else if (!sortLoopPromise) {
       sortSessionId++;
@@ -274,9 +358,11 @@ function transitionTo(newState) {
     if (cdEl) cdEl.textContent = '';
   }
   if (newState === 'PAUSED') {
-    if (pausedAt === 0) {
-      pausedAt = Date.now();
+    if (startTime > 0) {
+      elapsedBeforePause += (Date.now() - startTime);
+      startTime = 0;
     }
+    pausedAt = Date.now();
     updateHUD();
     setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, 'Paused', 'phase');
   }
@@ -291,15 +377,35 @@ function transitionTo(newState) {
   if (newState === 'COUNTDOWN') {
     let sl = countdownSeconds;
     const cdEl = document.getElementById('countdownDisplay');
+    
+    // Get next algorithm name for announcement
+    const keys = getAllAlgorithmKeys();
+    const nextIdx = (currentAllIndex + 1) % keys.length;
+    const nextKey = currentAlgorithm === 'all' ? keys[nextIdx] : currentAlgorithm;
+    const nextName = algorithms[nextKey]?.name || nextKey;
+
+    const updateAnnouncement = (seconds) => {
+      showAnnounce('', `${nextName} in ${seconds}s`, 'Sequence Transition', 0);
+    };
+
     if (cdEl) cdEl.textContent = `NEXT: ${sl}s`;
     setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, `Next in ${sl}s`, 'phase');
+    updateAnnouncement(sl);
+
     countdownInterval = setInterval(() => {
       sl--;
       if (sl > 0) {
         if (cdEl) cdEl.textContent = `NEXT: ${sl}s`;
         setHUDStep(currentPassLabel || `Pass 1: ${dataArray.length} nodes`, `Next in ${sl}s`, 'phase');
+        updateAnnouncement(sl);
       }
-      else { clearInterval(countdownInterval); reshuffle(); pickNext(); transitionTo('SORTING'); }
+      else { 
+        clearInterval(countdownInterval); 
+        hideAnnounce();
+        reshuffle(); 
+        pickNext(); 
+        transitionTo('SORTING'); 
+      }
     }, 1000);
   }
 }
@@ -332,6 +438,12 @@ function restoreRoundStartData() {
 
 function pickNext() {
   const sel = document.getElementById('algorithmSelect');
+  if (currentAlgorithm === 'all') {
+    currentAllIndex++;
+    updateHUDMeta();
+    updateAlgorithmDescription();
+    return;
+  }
   const nextIdx = (sel.selectedIndex + 1) % sel.options.length;
   sel.selectedIndex = nextIdx;
   currentAlgorithm = sel.options[nextIdx].value;
@@ -349,9 +461,15 @@ export function initController() {
   const volumeSlider = document.getElementById('ui-vol');
   const windowFullscreenBtn = document.getElementById('apple-fs');
   sel.innerHTML = '';
+  const allOpt = document.createElement('option');
+  allOpt.value = 'all';
+  allOpt.textContent = 'All Algorithms';
+  sel.appendChild(allOpt);
+
   for (const [k, v] of Object.entries(algorithms)) {
     const o = document.createElement('option'); o.value = k; o.textContent = v.name; sel.appendChild(o);
   }
+  
   sel.value = currentAlgorithm;
   if (nodeCountSlider) {
     setNodeCount(nodeCountSlider.value);
@@ -456,7 +574,15 @@ export function initController() {
     volumeSlider?.dispatchEvent(new Event('input'));
   });
 
-  sel.addEventListener('change', (e) => { currentAlgorithm = e.target.value; updateAlgorithmDescription(); updateFSMDisplay(); if (fsmState !== 'STOPPED') transitionTo('STOPPING'); });
+  sel.addEventListener('change', (e) => { 
+    currentAlgorithm = e.target.value; 
+    currentAllIndex = 0; // Reset index when switching to/from 'all'
+    resetElapsedOnNextSort = true;
+    updateAlgorithmDescription(); 
+    updateFSMDisplay(); 
+    if (fsmState !== 'STOPPED') transitionTo('STOPPING'); 
+    else updateHUD();
+  });
 
   let sHeld = false;
   window.addEventListener('keydown', (e) => {

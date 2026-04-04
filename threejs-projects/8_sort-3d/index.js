@@ -908,7 +908,8 @@ async function runSort() {
   if (sessionId === sortSession) {
     data = runtime.toDisplayData(runtime.workingArray);
     state.playing = false;
-    elapsedBeforePause = 0;
+    elapsedBeforePause += performance.now() - runStartedAt;
+    runStartedAt = 0;
     state.contextLabel = "COMPLETE";
     highlightIndices([]);
     syncNodes();

@@ -25,11 +25,12 @@ export const timSort = {
         while (j >= left && arr[j] > temp) {
           yield { type: 'compare', indices: [j, i] };
           arr[j + 1] = arr[j];
-          yield { type: 'swap', indices: [j + 1, j] };
+          yield { type: 'write', index: j + 1 };
           j--;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
         arr[j + 1] = temp;
+        yield { type: 'write', index: j + 1 };
       }
     }
 
@@ -47,22 +48,27 @@ export const timSort = {
         } else {
           arr[k++] = right[j++];
         }
+        yield { type: 'write', index: k - 1 };
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       while (i < len1) {
         arr[k++] = left[i++];
+        yield { type: 'write', index: k - 1 };
       }
       while (j < len2) {
         arr[k++] = right[j++];
+        yield { type: 'write', index: k - 1 };
       }
     }
 
     const n = array.length;
     for (let i = 0; i < n; i += RUN) {
+      yield { type: 'phase', label: `TIM RUN ${Math.floor(i / RUN) + 1}`, context: `${Math.min(i + RUN, n) - i} nodes` };
       yield* insertionSort(array, i, Math.min(i + RUN - 1, n - 1));
     }
 
     for (let size = RUN; size < n; size = 2 * size) {
+      yield { type: 'phase', label: `TIM MERGE ${size}`, context: `${Math.min(size * 2, n)} nodes` };
       for (let left = 0; left < n; left += 2 * size) {
         const mid = Math.min(left + size - 1, n - 1);
         const right = Math.min(left + 2 * size - 1, n - 1);

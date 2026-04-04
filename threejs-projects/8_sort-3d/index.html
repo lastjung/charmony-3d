@@ -25,6 +25,8 @@
       --cyan: #6de7ff;
       --blue: #5b8cff;
       --amber: #ffc857;
+      --glow-a: rgba(91, 140, 255, 0.12);
+      --glow-b: rgba(109, 231, 255, 0.12);
       --mono: "JetBrains Mono", monospace;
       --sans: "Outfit", sans-serif;
     }
@@ -40,8 +42,8 @@
       height: 100%;
       overflow: hidden;
       background:
-        radial-gradient(circle at top left, rgba(91, 140, 255, 0.12), transparent 32%),
-        radial-gradient(circle at bottom right, rgba(109, 231, 255, 0.12), transparent 28%),
+        radial-gradient(circle at top left, var(--glow-a), transparent 32%),
+        radial-gradient(circle at bottom right, var(--glow-b), transparent 28%),
         var(--bg);
       color: var(--text);
       font-family: var(--sans);
@@ -168,7 +170,7 @@
     }
 
     .announce-title {
-      font-size: clamp(24px, 3.2vw, 42px);
+      font-size: clamp(20px, 2.6vw, 34px);
       font-weight: 700;
       line-height: 1.08;
       letter-spacing: -0.04em;
@@ -214,6 +216,42 @@
 
     .field {
       margin-bottom: 14px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .toggle-row span {
+      font-size: 11px;
+      color: var(--text);
+      letter-spacing: 0.03em;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--blue);
+      flex: 0 0 auto;
+    }
+
+    .helper-note {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.5;
     }
 
     .field label {
@@ -494,6 +532,11 @@
         <option value="hue">Hue</option>
         <option value="all">All</option>
       </select>
+      <label class="toggle-row" for="show-start-message">
+        <span>Show Start Message</span>
+        <input type="checkbox" id="show-start-message" checked>
+      </label>
+      <div class="helper-note" id="sort-criterion-note">Height는 높이 기준, Hue는 색 기준, All은 Height 후 Hue를 한 번만 순차 실행합니다.</div>
     </div>
 
     <div class="field">
@@ -556,6 +599,16 @@
     <div class="field">
       <label for="elevation"><span>Height Gain</span><output id="elevation-value">1.00</output></label>
       <input type="range" id="elevation" min="0.4" max="1.8" step="0.05" value="1">
+    </div>
+
+    <div class="field">
+      <label for="color-scheme"><span>Color Scheme</span></label>
+      <select id="color-scheme">
+        <option value="aurora">Aurora</option>
+        <option value="sunset">Sunset</option>
+        <option value="mint">Mint</option>
+        <option value="candy">Candy</option>
+      </select>
     </div>
 
     <div class="stats">

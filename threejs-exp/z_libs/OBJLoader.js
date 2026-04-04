@@ -315,7 +315,7 @@ THREE.OBJLoader.prototype = {
 
 			var geometry = children[ i ].geometry;
 
-			geometry.computeCentroids();
+			// geometry.computeCentroids(); // DEPRECATED in modern THREE.js 
 			geometry.computeFaceNormals();
 			geometry.computeBoundingSphere();
 

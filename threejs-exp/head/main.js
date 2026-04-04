@@ -2,250 +2,198 @@
 
 /*
     A THREE.js experiment 2014 by http://bobbyroe.com
+    Upgraded with Multi-Material & Environment Selection by Antigravity (v2.0)
  */
 (function() {
-  var ball_geo, bouncelight, box_mat, box_mesh, camera, clicked, color_mat, controls, counter, ctrls, cube_geo, d, geos, getGreyMat, getMesh, getPhongMat, getRefractoBlurredMat, getRefractoMat, getWireMat, gold, gold_mat, gui, head_geo, hideInfoPanel, i, info_panel, init, loader, log, max_dist, mesh_scale, objects, onKeyUp, panel, parent, postprocessing, preloadAssets, refracto_mat, renderFrame, renderer, rimlight, scene, shader, showInfoPanel, sunlight, tetra_geo, texture_blurred_cube, texture_cube, toggleInfoPanel, w;
+  var bouncelight, box_mat, box_mesh, camera, clicked, controls, counter, ctrls, d, getMesh, getPhongMat, getRefractoMat, gold_mat, silver_mat, ruby_mat, emerald_mat, rainbow_mat, gui, head_geo, hideInfoPanel, info_panel, init, loader, log, objects, panel, parent, preloadAssets, refracto_mat, renderFrame, renderer, rimlight, scene, shader, showInfoPanel, sunlight, texture_blurred_cube, texture_cube, texture_disturb_cube, toggleInfoPanel, w;
   w = window;
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(60, w.innerWidth / w.innerHeight, 0.1, 20000);
-  renderer = new THREE.WebGLRenderer();
-  controls = new THREE.TrackballControls(camera);
-  postprocessing = {
-    enabled: false
-  };
-  texture_cube = null;
-  texture_blurred_cube = null;
+  camera = new THREE.PerspectiveCamera(60, w.innerWidth / w.innerHeight, 0.1, 25000);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   log = console.log.bind(console);
+  
+  // TrackballControls Initializations
+  controls = new THREE.TrackballControls(camera, renderer.domElement);
+  controls.rotateSpeed = 1.0;
+  controls.zoomSpeed = 1.2;
+  controls.staticMoving = true;
+  controls.dynamicDampingFactor = 0.3;
+
   counter = 0;
   ctrls = {
     use_turntable: true,
-    glass_material: false
+    material: 'Gold',
+    environment: 'Checkers'
   };
   w.ctrls = ctrls;
   gui = new dat.GUI();
-  gui.add(ctrls, 'use_turntable');
-  gold = gui.add(ctrls, 'glass_material');
-  controls.rotateSpeed = 1.0;
-  controls.zoomSpeed = 1.2;
-  controls.panSpeed = 0.8;
-  controls.noZoom = false;
-  controls.noPan = false;
-  controls.staticMoving = true;
-  controls.dynamicDampingFactor = 0.3;
-  controls.keys = [65, 83, 68];
+  gui.add(ctrls, 'use_turntable').name('Turntable');
+  
+  // Select material and environment
+  var mat_selector = gui.add(ctrls, 'material', ['Gold', 'Silver', 'Ruby', 'Emerald', 'Glass', 'Rainbow']).name('Select Material');
+  var env_selector = gui.add(ctrls, 'environment', ['Checkers', 'Blurred', 'Studio Light']).name('Select Wall');
+
   scene.fog = new THREE.FogExp2(0x00ccFF, 0.0001);
   renderer.setSize(w.innerWidth, w.innerHeight);
   info_panel = document.querySelector('#info');
   panel = renderer.domElement;
   panel.classList.add('panel');
   document.body.insertBefore(panel, info_panel);
-  document.addEventListener('keyup', onKeyUp, false);
-  ball_geo = new THREE.IcosahedronGeometry(0.6, 1);
-  cube_geo = new THREE.CubeGeometry(1, 1, 1);
-  tetra_geo = new THREE.SphereGeometry(1, 3, 2);
+
   loader = new THREE.OBJLoader();
   head_geo = null;
-  getWireMat = function(col) {
-    return new THREE.MeshBasicMaterial({
-      color: col,
-      opacity: 0.5,
-      wireframe: true,
-      wireframeLinewidth: 1
-    });
-  };
-  getGreyMat = function() {
-    return new THREE.MeshBasicMaterial({
-      color: 0xFF0000,
-      opacity: 1.0,
-      wireframe: false
-    });
-  };
-  getRefractoMat = function() {
-    var format, img, path, urls;
-    img = path = "../z_images/";
-    format = '.png';
-    urls = [path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format];
-    texture_cube = THREE.ImageUtils.loadTextureCube(urls, new THREE.CubeRefractionMapping());
+
+  // Load all textures upfront
+  var path = "../z_images/", format = '.png';
+  var urls = [path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format, path + 'checkers' + format];
+  var burls = [path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format];
+  
+  var d_path = "images/", d_format = '.jpg';
+  var durls = [d_path + 'disturb3a' + d_format, d_path + 'disturb3a' + d_format, d_path + 'disturb3a' + d_format, d_path + 'disturb3a' + d_format, d_path + 'disturb3a' + d_format, d_path + 'disturb3a' + d_format];
+
+  texture_cube = THREE.ImageUtils.loadTextureCube(urls, THREE.CubeReflectionMapping);
+  texture_blurred_cube = THREE.ImageUtils.loadTextureCube(burls, THREE.CubeReflectionMapping);
+  texture_disturb_cube = THREE.ImageUtils.loadTextureCube(durls, THREE.CubeReflectionMapping);
+
+  getRefractoMat = function(env) {
     return new THREE.MeshBasicMaterial({
       color: 0xFFFFFF,
-      envMap: texture_cube,
-      refractionRatio: 0.95
+      envMap: env,
+      refractionRatio: 0.95,
+      mapping: THREE.CubeRefractionMapping 
     });
   };
-  getRefractoBlurredMat = function() {
-    var burls, format, path;
-    path = "../z_images/";
-    format = '.png';
-    burls = [path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format, path + 'checkers_blurred' + format];
-    texture_blurred_cube = THREE.ImageUtils.loadTextureCube(burls, new THREE.CubeRefractionMapping());
-    return new THREE.MeshBasicMaterial({
-      color: 0xFFFFFF,
-      envMap: texture_blurred_cube,
-      refractionRatio: 0.95
-    });
-  };
-  getPhongMat = function() {
-    var format, map_height, options, path, phong_texture_cube, urls;
-    path = "images/";
-    format = '.jpg';
-    urls = [path + 'disturb3a' + format, path + 'disturb3a' + format, path + 'disturb3a' + format, path + 'disturb3a' + format, path + 'disturb3a' + format, path + 'disturb3a' + format];
-    phong_texture_cube = THREE.ImageUtils.loadTextureCube(urls);
-    map_height = THREE.ImageUtils.loadTexture("images/bump.jpg");
-    map_height.anisotropy = 4;
-    map_height.repeat.set(0.998, 0.998);
-    map_height.offset.set(0.001, 0.001);
-    map_height.wrapS = map_height.wrapT = THREE.RepeatWrapping;
-    map_height.format = THREE.RGBFormat;
-    options = {
-      envMap: phong_texture_cube,
+
+  getPhongMat = function(type, env) {
+    var map_height = THREE.ImageUtils.loadTexture("images/bump.jpg");
+    var options = {
+      envMap: env,
       bumpMap: map_height,
       color: 0xFFFFFF,
       specular: 0xFFFFFF,
-      shininess: 30,
+      shininess: 45,
       bumpScale: 1.5,
-      emissive: 0x552200,
-      shading: THREE.SmoothShading
+      shading: THREE.SmoothShading,
+      reflectivity: 0.7
     };
+
+    switch(type) {
+      case 'Gold':    options.emissive = 0x664400; options.color = 0xAA8800; break;
+      case 'Silver':  options.emissive = 0x333333; options.specular = 0xEEEEEE; options.reflectivity = 0.9; break;
+      case 'Ruby':    options.emissive = 0x880000; options.color = 0xFF2222; break;
+      case 'Emerald': options.emissive = 0x008800; options.color = 0x22FF22; break;
+      case 'Rainbow': options.emissive = 0x222222; options.color = 0xFFFFFF; break;
+    }
     return new THREE.MeshPhongMaterial(options);
   };
-  refracto_mat = getRefractoBlurredMat();
-  color_mat = getRefractoMat();
-  gold_mat = getPhongMat();
-  geos = [cube_geo, tetra_geo];
-  objects = [];
+
+  // Pre-generate materials (will update them dynamically)
+  gold_mat = getPhongMat('Gold', texture_cube);
+  silver_mat = getPhongMat('Silver', texture_cube);
+  ruby_mat = getPhongMat('Ruby', texture_cube);
+  emerald_mat = getPhongMat('Emerald', texture_cube);
+  rainbow_mat = getPhongMat('Rainbow', texture_cube);
+  refracto_mat = getRefractoMat(texture_cube);
+
   parent = new THREE.Object3D();
   scene.add(parent);
-  sunlight = new THREE.DirectionalLight(0xffffdd, 1.0);
-  bouncelight = new THREE.DirectionalLight(0xddffff, 0.6);
-  rimlight = new THREE.DirectionalLight(0xddffff, 1.2);
+
+  sunlight = new THREE.DirectionalLight(0xffffdd, 1.2);
+  bouncelight = new THREE.DirectionalLight(0xddffff, 0.4);
+  rimlight = new THREE.DirectionalLight(0xddffff, 1.5);
   sunlight.position.set(1, 1, 1);
   bouncelight.position.set(-1, -1, -1);
   rimlight.position.set(0, 0.5, -1);
   scene.add(rimlight);
   scene.add(sunlight);
   scene.add(bouncelight);
-  max_dist = 6000;
-  mesh_scale = 400;
-  i = 0;
-  getMesh = function(n) {
-    var geometry, getGridPosition, getPosition, goal_pos, inc, material, mesh, move_rate, obj, rand, rate;
-    rand = Math.random() * 100;
-    inc = Math.floor(Math.random() * geos.length);
-    geometry = head_geo;
-    material = gold_mat;
-    mesh = new THREE.Mesh(geometry, material);
-    getPosition = function() {
-      return {
-        x: Math.random() * max_dist - max_dist * 0.5,
-        y: Math.random() * max_dist - max_dist * 0.5,
-        z: Math.random() * max_dist - max_dist * 0.5
-      };
-    };
-    getGridPosition = function() {
-      return {
-        x: (n % 5 * mesh_scale) - 800,
-        y: (Math.floor(n * 0.2) % 5 * mesh_scale) - 800,
-        z: (Math.floor(n * 0.04) * -mesh_scale) + 800
-      };
-    };
-    mesh.position = {
-      x: 0,
-      y: -1000,
-      z: 0
-    };
-    mesh.scale.x = mesh.scale.y = mesh.scale.z = 1000;
-    rate = Math.random() * 0.03 + 0.0;
-    move_rate = Math.random() * 0.03 + 0.005;
-    goal_pos = mesh.position;
-    parent.add(mesh);
-    return obj = {
-      mesh: mesh
-    };
-  };
+
+  objects = [];
   init = function() {
-    var obj;
-    while (i < 1) {
-      obj = getMesh(i);
-      objects.push(obj);
-      i += 1;
+    if (objects.length < 1) {
+      var mesh = new THREE.Mesh(head_geo, gold_mat);
+      mesh.position.set(0, -1000, 0);
+      mesh.scale.set(1000, 1000, 1000);
+      parent.add(mesh);
+      objects.push({ mesh: mesh });
     }
+    shader = THREE.ShaderLib["cube"];
+    shader.uniforms["tCube"].value = texture_cube;
+    box_mat = new THREE.ShaderMaterial({
+      fragmentShader: shader.fragmentShader,
+      vertexShader: shader.vertexShader,
+      uniforms: shader.uniforms,
+      depthWrite: false, side: THREE.BackSide
+    });
+    box_mesh = new THREE.Mesh(new THREE.BoxGeometry(20000, 20000, 20000), box_mat);
+    scene.add(box_mesh);
     renderFrame();
   };
-  shader = THREE.ShaderLib["cube"];
-  shader.uniforms["tCube"].value = texture_cube;
-  box_mat = new THREE.ShaderMaterial({
-    fragmentShader: shader.fragmentShader,
-    vertexShader: shader.vertexShader,
-    uniforms: shader.uniforms,
-    depthWrite: false,
-    side: THREE.BackSide
-  });
-  box_mesh = new THREE.Mesh(new THREE.CubeGeometry(10000, 10000, 10000), box_mat);
-  scene.add(box_mesh);
-  camera.position.z = 2000;
-  camera.position.y = 800;
-  camera.position.x = -1200;
-  onKeyUp = function(evnt) {
-    console.log(evt.keyCode);
+
+  camera.position.set(-1200, 800, 2000);
+
+  var updateAllMats = function() {
+    var env;
+    switch(ctrls.environment) {
+      case 'Checkers': env = texture_cube; break;
+      case 'Blurred':  env = texture_blurred_cube; break;
+      case 'Studio Light': env = texture_disturb_cube; break;
+    }
+    // Update materials envMap
+    [gold_mat, silver_mat, ruby_mat, emerald_mat, rainbow_mat, refracto_mat].forEach(function(m) {
+      m.envMap = env;
+      m.needsUpdate = true;
+    });
+    // Update skybox
+    if (box_mesh) {
+      box_mesh.material.uniforms["tCube"].value = env;
+    }
   };
-  gold.onChange(function(use_glass_shader) {
-    var obj;
-    obj = objects[0];
-    log(obj);
-    if (use_glass_shader === false) {
-      return obj.mesh.material = gold_mat;
-    } else {
-      return obj.mesh.material = refracto_mat;
+
+  mat_selector.onChange(function(val) {
+    if (!objects[0]) return;
+    switch(val) {
+      case 'Gold': objects[0].mesh.material = gold_mat; break;
+      case 'Silver': objects[0].mesh.material = silver_mat; break;
+      case 'Ruby': objects[0].mesh.material = ruby_mat; break;
+      case 'Emerald': objects[0].mesh.material = emerald_mat; break;
+      case 'Glass': objects[0].mesh.material = refracto_mat; break;
+      case 'Rainbow': objects[0].mesh.material = rainbow_mat; break;
     }
   });
+
+  env_selector.onChange(updateAllMats);
+
   renderFrame = function() {
     requestAnimationFrame(renderFrame);
     if (ctrls.use_turntable === true) {
       counter += 0.004;
       parent.rotation.y = counter * -1;
     }
-    controls.update();
-    renderer.clear();
-    return renderer.render(scene, camera);
-  };
-  preloadAssets = function() {
-    loader.load('../z_objs/asaro_04a.obj', function(obj) {
-      head_geo = obj.children[0].geometry;
-      init();
-    });
-  };
-  preloadAssets();
-  d = document;
-  showInfoPanel = function() {
-    var is_highlighing_points;
-    panel.classList.add('scooched_right');
-    info_panel.classList.add('open');
-    return is_highlighing_points = false;
-  };
-  hideInfoPanel = function() {
-    var is_highlighing_points;
-    panel.classList.remove('scooched_right');
-    info_panel.classList.remove('open');
-    return is_highlighing_points = true;
-  };
-  toggleInfoPanel = function() {
-    if (info_panel.classList.contains('open')) {
-      return hideInfoPanel();
-    } else {
-      return showInfoPanel();
+    if (ctrls.material === 'Rainbow') {
+      rainbow_mat.emissive.setHSL((Date.now() * 0.0005) % 1.0, 0.6, 0.2);
     }
+    controls.update();
+    renderer.render(scene, camera);
   };
+
+  loader.load('../z_objs/asaro_04a.obj', function(obj) {
+    obj.traverse(function(child) {
+      if (child instanceof THREE.Mesh && !head_geo) { head_geo = child.geometry; }
+    });
+    if (head_geo) init();
+  });
+
   clicked = function(evt) {
     if (evt.target.id === 'nub') {
-      toggleInfoPanel();
-    }
-    if (evt.target.id === '') {
-      return hideInfoPanel();
+      if (info_panel.classList.contains('open')) {
+        panel.classList.remove('scooched_right');
+        info_panel.classList.remove('open');
+      } else {
+        panel.classList.add('scooched_right');
+        info_panel.classList.add('open');
+      }
     }
   };
-  return d.addEventListener('click', clicked);
+  document.addEventListener('click', clicked);
 })();
-
-/*
-//@ sourceMappingURL=main.map
-*/

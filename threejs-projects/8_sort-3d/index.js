@@ -516,6 +516,42 @@ function getLayoutPosition(index, count = state.nodeCount) {
     );
   }
 
+  if (state.layout === "helix") {
+    const t = count <= 1 ? 0 : index / (count - 1);
+    const turns = Math.max(2.5, count / 24);
+    const angle = t * Math.PI * 2 * turns;
+    const radius = 4.2 * spacing;
+    const z = 6 - t * 12;
+    return new THREE.Vector3(
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+      z
+    );
+  }
+
+  if (state.layout === "pyramid") {
+    let remaining = count;
+    let level = 0;
+    let indexInLevel = index;
+    while (remaining > 0) {
+      const side = level + 1;
+      const levelCount = side * side;
+      if (indexInLevel < levelCount) {
+        const x = indexInLevel % side;
+        const y = Math.floor(indexInLevel / side);
+        const offset = (side - 1) / 2;
+        return new THREE.Vector3(
+          (x - offset) * spacing * 1.2,
+          (y - offset) * spacing * 1.2,
+          (Math.ceil(Math.sqrt(count)) * 0.5 - level) * spacing * 1.05
+        );
+      }
+      indexInLevel -= levelCount;
+      remaining -= levelCount;
+      level += 1;
+    }
+  }
+
   const cols = Math.ceil(Math.sqrt(count));
   const rows = Math.ceil(count / cols);
   const x = index % cols;
@@ -578,10 +614,23 @@ function applyNodeTransform(mesh, index, value, instant = false) {
     const branchNormal = radial.lengthSq() > 0.0001
       ? radial.normalize()
       : new THREE.Vector3(0, 1, 0);
-    mesh.position.copy(base.clone().add(branchNormal.clone().multiplyScalar(height * 0.12)));
-    baseScale.setScalar(0.36 + height * 0.04);
-    mesh.scale.copy(baseScale);
-    mesh.lookAt(mesh.position.clone().add(branchNormal));
+    const axisPoint = new THREE.Vector3(0, 0, base.z);
+    const branchLength = Math.max(0.2, height * 0.792);
+
+    if (state.shape === "rectangle" || state.shape === "cylinder" || state.shape === "cone") {
+      mesh.position.copy(axisPoint.clone().add(branchNormal.clone().multiplyScalar(branchLength * 0.5)));
+      baseScale.set(0.24, 0.24, branchLength);
+      mesh.scale.copy(baseScale);
+      mesh.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        branchNormal
+      );
+    } else {
+      mesh.position.copy(axisPoint.clone().add(branchNormal.clone().multiplyScalar(branchLength)));
+      baseScale.setScalar(0.22 + height * 0.028);
+      mesh.scale.copy(baseScale);
+      mesh.lookAt(mesh.position.clone().add(branchNormal));
+    }
   } else {
     const normal = base.clone().normalize();
     mesh.position.copy(base.clone().add(normal.multiplyScalar(height * 0.24)));

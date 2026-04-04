@@ -6,6 +6,7 @@ import { normalizeSortStep } from "./sortEvents.js";
 
 const state = {
   algorithmKey: "radixSort",
+  activeAlgorithmKey: "radixSort",
   nodeCount: 64,
   speed: 72,
   layout: "grid",
@@ -16,6 +17,7 @@ const state = {
   showStartMessage: true,
   spacing: 1.2,
   elevation: 1,
+  zRotationSpeed: 0,
   playing: false,
   frameCount: 0,
   lastFpsSample: performance.now(),
@@ -40,6 +42,8 @@ const ui = {
   spacingValue: document.getElementById("spacing-value"),
   elevation: document.getElementById("elevation"),
   elevationValue: document.getElementById("elevation-value"),
+  zRotation: document.getElementById("z-rotation"),
+  zRotationValue: document.getElementById("z-rotation-value"),
   colorScheme: document.getElementById("color-scheme"),
   statusValue: document.getElementById("status-value"),
   stepValue: document.getElementById("step-value"),
@@ -54,6 +58,7 @@ const ui = {
   playBtn: document.getElementById("play-btn"),
   shuffleBtn: document.getElementById("shuffle-btn"),
   resetBtn: document.getElementById("reset-btn"),
+  halfResetBtn: document.getElementById("half-reset-btn"),
   hudAlgorithm: document.getElementById("hud-algorithm"),
   hudTimer: document.getElementById("hud-timer"),
   hudStep: document.getElementById("hud-step"),
@@ -78,6 +83,20 @@ const PENTATONIC_SCALE = [
   261.63, 293.66, 329.63, 392.0, 440.0,
   523.25, 587.33, 659.25, 783.99, 880.0,
 ];
+
+const ICONS = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>',
+  muted: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>',
+  slow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+  fast: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-1.41 1.41L13.17 12l-4.58 4.59L10 18l6-6z"/></svg>',
+  halfReset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19 2 12l9-7v4c5.52 0 10 4.48 10 10h-2c0-4.42-3.58-8-8-8z"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.59 9.17-5.18-5.17L4 5.41l5.17 5.17zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.45 20 9.5V4zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04z"/></svg>',
+  reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>',
+  fullscreen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6h-2V6.41l-3.29 3.3-1.42-1.42L17.59 5H15zm-6 0v2H6.41l3.3 3.29-1.42 1.42L5 6.41V9H3V3zm9.59 12.29L20 16.41V21h-4.59l1.3-1.29-3.3-3.3 1.42-1.42zM9.71 15.29l1.42 1.42-3.3 3.3H12V21H3v-6h2v2.59z"/></svg>',
+  fullscreenExit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7zm0-4h2V7h3V5H5v5zm10 7h-3v2h5v-5h-2zm0-12v2h-3v2h5V5z"/></svg>',
+};
 
 const COLOR_SCHEMES = {
   aurora: {
@@ -229,6 +248,10 @@ let nodePulseState = [];
 let runStartedAt = 0;
 let elapsedBeforePause = 0;
 let announceTimeoutId = null;
+let roundStartData = [];
+let lastFrameAt = performance.now();
+const ALL_ALGORITHM_EXCLUDED_KEYS = new Set(["slowSort", "stoogeSort"]);
+const CAMERA_ORBIT_SPEED = 1.2;
 
 const baseMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.32,
@@ -305,6 +328,29 @@ function resetData() {
   updateHud();
 }
 
+function captureRoundStartData() {
+  roundStartData = [...data];
+}
+
+function restoreRoundStartData() {
+  if (roundStartData.length !== data.length || roundStartData.length === 0) return;
+  data = [...roundStartData];
+  nodePulseState = Array.from({ length: state.nodeCount }, () => ({ until: 0, strength: 0 }));
+  state.stepCount = 0;
+  state.phaseLabel = "Phase 1";
+  state.contextLabel = "READY";
+  state.compareLabel = "-";
+  ui.hudTimer.textContent = "00:00:00";
+  updateHud();
+}
+
+function stopSortPlayback() {
+  sortSession += 1;
+  state.playing = false;
+  elapsedBeforePause = 0;
+  highlightIndices([]);
+}
+
 function getNodeGeometry() {
   return state.shape === "sphere"
     ? new THREE.SphereGeometry(0.38, 20, 20)
@@ -366,6 +412,51 @@ function getSortRuntime(criterion) {
       return needsProxy ? workingArray.map(v => reverseAuxValues.get(v)) : [...workingArray];
     },
   };
+}
+
+function getRunnableAlgorithmKeys() {
+  return Object.keys(algorithms).filter((key) => !ALL_ALGORITHM_EXCLUDED_KEYS.has(key));
+}
+
+function getCurrentAlgorithmKey() {
+  if (state.algorithmKey !== "all") return state.algorithmKey;
+  const runnableKeys = getRunnableAlgorithmKeys();
+  if (runnableKeys.length === 0) return "radixSort";
+  return runnableKeys.includes(state.activeAlgorithmKey)
+    ? state.activeAlgorithmKey
+    : runnableKeys[0];
+}
+
+function resetActiveSelections() {
+  state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+  state.activeAlgorithmKey = state.algorithmKey === "all"
+    ? getRunnableAlgorithmKeys()[0] ?? "radixSort"
+    : state.algorithmKey;
+}
+
+function getNextAlgorithmKey(currentKey) {
+  const runnableKeys = getRunnableAlgorithmKeys();
+  const currentIndex = runnableKeys.indexOf(currentKey);
+  if (currentIndex < 0 || currentIndex >= runnableKeys.length - 1) return null;
+  return runnableKeys[currentIndex + 1];
+}
+
+function isAlgorithmAllMode() {
+  return state.algorithmKey === "all";
+}
+
+function getStepDelayMs() {
+  const baseDelay = Math.max(0, 60 - state.speed * 0.53);
+  return isAlgorithmAllMode()
+    ? Math.max(0, Math.round(baseDelay * 0.22))
+    : baseDelay;
+}
+
+function getSwapDurationMs() {
+  const baseDuration = Math.max(14, 88 - state.speed * 0.66);
+  return isAlgorithmAllMode()
+    ? Math.max(6, Math.round(baseDuration * 0.32))
+    : baseDuration;
 }
 
 function getLayoutPosition(index, count = state.nodeCount) {
@@ -525,7 +616,7 @@ async function animateSwap(indexA, indexB) {
   const meshB = nodeMeshes[indexB];
   const startA = meshA.position.clone();
   const startB = meshB.position.clone();
-  const duration = Math.max(14, 88 - state.speed * 0.66);
+  const duration = getSwapDurationMs();
   const start = performance.now();
 
   await new Promise((resolve) => {
@@ -548,27 +639,40 @@ async function animateSwap(indexA, indexB) {
 }
 
 function updateHud() {
-  const algo = algorithms[state.algorithmKey];
+  const currentAlgorithmKey = getCurrentAlgorithmKey();
+  const algo = algorithms[currentAlgorithmKey];
   const sortModeLabel = state.sortCriterion.toUpperCase();
   ui.nodeCountValue.textContent = String(state.nodeCount);
   ui.speedValue.textContent = String(state.speed);
   ui.spacingValue.textContent = state.spacing.toFixed(2);
   ui.elevationValue.textContent = state.elevation.toFixed(2);
+  ui.zRotationValue.textContent = state.zRotationSpeed.toFixed(2);
   ui.statusValue.textContent = state.playing ? "RUNNING" : "IDLE";
   ui.stepValue.textContent = String(state.stepCount);
   ui.compareValue.textContent = state.compareLabel;
   ui.phaseValue.textContent = state.phaseLabel;
   const criterionLabel = state.activeCriterion.toUpperCase();
-  const fullAlgoName = `${algo?.name ?? state.algorithmKey} / ${criterionLabel}`;
+  const fullAlgoName = `${algo?.name ?? currentAlgorithmKey} / ${criterionLabel}`;
 
   ui.metaAlgorithm.textContent = fullAlgoName;
   ui.metaLayout.textContent = state.layout.toUpperCase();
   ui.metaShape.textContent = state.shape.toUpperCase();
   ui.timelineLabel.textContent = state.contextLabel;
   ui.progressBar.style.width = `${Math.min(100, (state.stepCount / Math.max(1, state.nodeCount * 8)) * 100)}%`;
-  ui.playBtn.textContent = state.playing ? "Pause" : "Play";
-  ui.muteBtn.textContent = state.isMuted ? "Muted" : "Mute";
-  ui.fullscreenBtn.textContent = state.immersive ? "Exit" : "Full";
+  ui.playBtn.innerHTML = state.playing ? ICONS.pause : ICONS.play;
+  ui.playBtn.title = state.playing ? "Pause" : "Play";
+  ui.playBtn.setAttribute("aria-label", state.playing ? "Pause" : "Play");
+  ui.muteBtn.innerHTML = state.isMuted ? ICONS.muted : ICONS.mute;
+  ui.muteBtn.title = state.isMuted ? "Unmute" : "Mute";
+  ui.muteBtn.setAttribute("aria-label", state.isMuted ? "Unmute" : "Mute");
+  ui.fullscreenBtn.innerHTML = state.immersive ? ICONS.fullscreenExit : ICONS.fullscreen;
+  ui.fullscreenBtn.title = state.immersive ? "Exit Immersive View" : "Immersive View";
+  ui.fullscreenBtn.setAttribute("aria-label", state.immersive ? "Exit Immersive View" : "Immersive View");
+  ui.speedDownBtn.innerHTML = ICONS.slow;
+  ui.speedUpBtn.innerHTML = ICONS.fast;
+  ui.halfResetBtn.innerHTML = ICONS.halfReset;
+  ui.shuffleBtn.innerHTML = ICONS.shuffle;
+  ui.resetBtn.innerHTML = ICONS.reset;
   ui.hudAlgorithm.textContent = fullAlgoName;
   ui.hudStep.textContent = state.phaseLabel;
   ui.hudContext.textContent = state.contextLabel;
@@ -697,17 +801,49 @@ function showAnnouncement(title, detail = "", kicker = "Sort 3D", durationMs = 1
 
 async function runSort() {
   const sessionId = ++sortSession;
-  const phaseTracker = createPhaseTracker(state.algorithmKey);
-  const algorithmName = algorithms[state.algorithmKey]?.name ?? state.algorithmKey;
-  const isAllFirstStage = state.sortCriterion === "all" && state.activeCriterion === "height";
+  const currentAlgorithmKey = getCurrentAlgorithmKey();
+  const phaseTracker = createPhaseTracker(currentAlgorithmKey);
+  const algorithmName = algorithms[currentAlgorithmKey]?.name ?? currentAlgorithmKey;
+  const isSortAllFirstStage = state.sortCriterion === "all" && state.activeCriterion === "height";
+  const isAlgorithmAllFirstStage = state.algorithmKey === "all"
+    && currentAlgorithmKey === (getRunnableAlgorithmKeys()[0] ?? currentAlgorithmKey);
+
+  if (state.algorithmKey === "all" && state.sortCriterion === "all") {
+    state.playing = false;
+    state.contextLabel = "STOP";
+    state.compareLabel = "ALGORITHM ALL + SORT ALL";
+    showAnnouncement(
+      "Sequence stopped",
+      "Algorithm All cannot run with Sort By All"
+    );
+    updateHud();
+    return;
+  }
+
   state.playing = true;
+  captureRoundStartData();
+  if (state.algorithmKey !== "all") {
+    state.activeAlgorithmKey = state.algorithmKey;
+  } else if (!algorithms[state.activeAlgorithmKey] || ALL_ALGORITHM_EXCLUDED_KEYS.has(state.activeAlgorithmKey)) {
+    state.activeAlgorithmKey = getRunnableAlgorithmKeys()[0] ?? "radixSort";
+  }
   if (state.sortCriterion !== "all") {
     state.activeCriterion = state.sortCriterion;
   } else if (state.activeCriterion !== "height" && state.activeCriterion !== "hue") {
     state.activeCriterion = "height";
   }
   runStartedAt = performance.now();
-  if (isAllFirstStage) {
+  if (isAlgorithmAllFirstStage && state.sortCriterion !== "all") {
+    showAnnouncement(
+      "Starting all algorithms",
+      `sort by ${state.activeCriterion}`,
+      "Sort 3D",
+      2600
+    );
+    const canContinue = await waitWithCancel(1500, sessionId);
+    if (!canContinue || sessionId !== sortSession) return;
+  }
+  if (isSortAllFirstStage) {
     showAnnouncement(
       `Starting ${algorithmName}`,
       "using height and color",
@@ -734,7 +870,7 @@ async function runSort() {
     ? state.activeCriterion
     : state.sortCriterion;
   const runtime = getSortRuntime(chosenCriterion);
-  const generator = algorithms[state.algorithmKey].generator(runtime.workingArray);
+  const generator = algorithms[currentAlgorithmKey].generator(runtime.workingArray);
   for await (const rawStep of generator) {
     if (sessionId !== sortSession || !state.playing) break;
 
@@ -766,7 +902,7 @@ async function runSort() {
     }
 
     updateHud();
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 60 - state.speed * 0.53)));
+    await new Promise((resolve) => setTimeout(resolve, getStepDelayMs()));
   }
 
   if (sessionId === sortSession) {
@@ -797,10 +933,38 @@ async function runSort() {
       state.activeCriterion = "height";
       updateHud();
     }
+
+    if (state.algorithmKey === "all") {
+      const nextAlgorithmKey = getNextAlgorithmKey(currentAlgorithmKey);
+      if (nextAlgorithmKey) {
+        state.contextLabel = "NEXT";
+        state.compareLabel = `${algorithms[nextAlgorithmKey]?.name ?? nextAlgorithmKey} IN 2.0s`;
+        updateHud();
+
+        const canContinue = await waitWithCancel(2000, sessionId);
+        if (!canContinue || sessionId !== sortSession) return;
+
+        state.compareLabel = "-";
+        state.contextLabel = "READY";
+        state.activeAlgorithmKey = nextAlgorithmKey;
+        resetData();
+        syncNodes();
+        await runSort();
+        return;
+      }
+
+      state.activeAlgorithmKey = getRunnableAlgorithmKeys()[0] ?? state.activeAlgorithmKey;
+      updateHud();
+    }
   }
 }
 
 function populateAlgorithms() {
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All Algorithms";
+  ui.algorithmSelect.appendChild(allOption);
+
   Object.entries(algorithms).forEach(([key, algo]) => {
     const option = document.createElement("option");
     option.value = key;
@@ -831,8 +995,10 @@ function toggleShape(nextShape) {
 function bindUi() {
   ui.algorithmSelect.addEventListener("change", () => {
     state.algorithmKey = ui.algorithmSelect.value;
+    resetActiveSelections();
     state.phaseLabel = "Phase 1";
     state.contextLabel = "READY";
+    state.compareLabel = "-";
     updateHud();
   });
 
@@ -840,7 +1006,7 @@ function bindUi() {
     const nextValue = ui.sortCriterion.value;
     state.sortCriterion = nextValue === "hue" || nextValue === "all" ? nextValue : "height";
     if (!state.playing) {
-      state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+      resetActiveSelections();
     }
     updateHud();
   });
@@ -856,6 +1022,7 @@ function bindUi() {
     state.nodeCount = Number.parseInt(ui.nodeCount.value, 10);
     buildAuxValues();
     resetData();
+    captureRoundStartData();
     rebuildNodes();
   });
 
@@ -873,6 +1040,11 @@ function bindUi() {
   ui.elevation.addEventListener("input", () => {
     state.elevation = Number.parseFloat(ui.elevation.value);
     syncNodes();
+    updateHud();
+  });
+
+  ui.zRotation.addEventListener("input", () => {
+    state.zRotationSpeed = Number.parseFloat(ui.zRotation.value);
     updateHud();
   });
 
@@ -895,23 +1067,29 @@ function bindUi() {
 
   ui.shuffleBtn.addEventListener("click", () => {
     ensureAudio();
-    sortSession += 1;
-    state.playing = false;
-    elapsedBeforePause = 0;
-    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+    stopSortPlayback();
+    resetActiveSelections();
     buildAuxValues();
     resetData();
+    captureRoundStartData();
     syncNodes();
   });
 
   ui.resetBtn.addEventListener("click", () => {
     ensureAudio();
-    sortSession += 1;
-    state.playing = false;
-    elapsedBeforePause = 0;
-    state.activeCriterion = state.sortCriterion === "all" ? "height" : state.sortCriterion;
+    stopSortPlayback();
+    resetActiveSelections();
     resetData();
+    captureRoundStartData();
     syncNodes();
+  });
+
+  ui.halfResetBtn.addEventListener("click", () => {
+    ensureAudio();
+    stopSortPlayback();
+    restoreRoundStartData();
+    syncNodes();
+    showAnnouncement("Round restored", "returned to the current round start");
   });
 
   ui.playBtn.addEventListener("click", async () => {
@@ -968,6 +1146,16 @@ function bindUi() {
 
 function animate(now) {
   requestAnimationFrame(animate);
+  const deltaSeconds = Math.max(0, (now - lastFrameAt) / 1000);
+  lastFrameAt = now;
+  if (state.zRotationSpeed !== 0) {
+    const orbitOffset = camera.position.clone().sub(controls.target);
+    orbitOffset.applyAxisAngle(
+      new THREE.Vector3(0, 0, 1),
+      deltaSeconds * CAMERA_ORBIT_SPEED * state.zRotationSpeed
+    );
+    camera.position.copy(controls.target.clone().add(orbitOffset));
+  }
   updateNodeGlow(now);
   if (state.playing) {
     const elapsed = elapsedBeforePause + (now - runStartedAt);
@@ -998,9 +1186,11 @@ populateAlgorithms();
 bindUi();
 ui.showStartMessage.checked = state.showStartMessage;
 ui.colorScheme.value = state.colorScheme;
+ui.zRotation.value = String(state.zRotationSpeed);
 applyColorScheme();
 buildAuxValues();
 resetData();
+captureRoundStartData();
 rebuildNodes();
 updateHud();
 animate(performance.now());

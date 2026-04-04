@@ -549,6 +549,10 @@
         <span>Show Start Message</span>
         <input type="checkbox" id="show-start-message" checked>
       </label>
+      <label class="toggle-row" for="link-height-color">
+        <span>Link Height/Color</span>
+        <input type="checkbox" id="link-height-color">
+      </label>
       <div class="helper-note" id="sort-criterion-note">Height는 높이 기준, Hue는 색 기준, All은 Height 후 Hue를 한 번만 순차 실행합니다.</div>
     </div>
 
@@ -559,7 +563,7 @@
 
     <div class="field">
       <label for="speed"><span>Playback Speed</span><output id="speed-value">72</output></label>
-      <input type="range" id="speed" min="1" max="100" step="1" value="72">
+      <input type="range" id="speed" min="1" max="200" step="1" value="72">
     </div>
 
     <div class="stats">
@@ -629,6 +633,8 @@
     <div class="field">
       <label for="color-scheme"><span>Color Scheme</span></label>
       <select id="color-scheme">
+        <option value="rainbow">Rainbow</option>
+        <option value="cosmic">Cosmic</option>
         <option value="aurora">Aurora</option>
         <option value="sunset">Sunset</option>
         <option value="mint">Mint</option>

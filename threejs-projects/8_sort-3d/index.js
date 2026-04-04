@@ -15,6 +15,7 @@ const state = {
   sortCriterion: "height",
   activeCriterion: "height",
   showStartMessage: true,
+  linkHeightColor: false,
   spacing: 1.2,
   elevation: 1,
   zRotationSpeed: 0,
@@ -34,6 +35,7 @@ const ui = {
   sortCriterion: document.getElementById("sort-criterion"),
   sortCriterionNote: document.getElementById("sort-criterion-note"),
   showStartMessage: document.getElementById("show-start-message"),
+  linkHeightColor: document.getElementById("link-height-color"),
   nodeCount: document.getElementById("node-count"),
   nodeCountValue: document.getElementById("node-count-value"),
   speed: document.getElementById("speed"),
@@ -99,6 +101,54 @@ const ICONS = {
 };
 
 const COLOR_SCHEMES = {
+  rainbow: {
+    ui: {
+      bg: "#06080f",
+      panel: "rgba(12, 14, 24, 0.72)",
+      panelBorder: "rgba(255, 255, 255, 0.08)",
+      text: "#f9fbff",
+      muted: "rgba(240, 245, 255, 0.62)",
+      cyan: "#54d6ff",
+      blue: "#7b83ff",
+      amber: "#ffb84d",
+      glowA: "rgba(123, 131, 255, 0.14)",
+      glowB: "rgba(255, 91, 146, 0.12)",
+    },
+    nodes: {
+      hueStart: 0.0,
+      hueSpan: 1.0,
+      saturation: 0.92,
+      lightness: 0.58,
+      rim: 0xffffff,
+      gridMajor: 0x3c4268,
+      gridMinor: 0x1c2238,
+      sceneBg: 0x06080f,
+    },
+  },
+  cosmic: {
+    ui: {
+      bg: "#050611",
+      panel: "rgba(11, 12, 28, 0.74)",
+      panelBorder: "rgba(170, 206, 255, 0.12)",
+      text: "#f5f8ff",
+      muted: "rgba(221, 232, 255, 0.62)",
+      cyan: "#74dfff",
+      blue: "#7f8cff",
+      amber: "#9b7cff",
+      glowA: "rgba(116, 223, 255, 0.12)",
+      glowB: "rgba(155, 124, 255, 0.14)",
+    },
+    nodes: {
+      hueStart: 190 / 360,
+      hueSpan: 100 / 360,
+      saturation: 0.86,
+      lightness: 0.6,
+      rim: 0x74dfff,
+      gridMajor: 0x2a3560,
+      gridMinor: 0x131a32,
+      sceneBg: 0x050611,
+    },
+  },
   aurora: {
     ui: {
       bg: "#04060d",
@@ -406,7 +456,9 @@ function applyColorScheme() {
 
 function getColorForValue(value) {
   const { nodes } = getScheme();
-  const sourceValue = auxValues.get(value) ?? value;
+  const sourceValue = state.linkHeightColor
+    ? value
+    : (auxValues.get(value) ?? value);
   const t = state.nodeCount <= 1 ? 0 : (sourceValue - 1) / (state.nodeCount - 1);
   return new THREE.Color().setHSL(
     (nodes.hueStart + (t * nodes.hueSpan)) % 1,
@@ -756,12 +808,12 @@ function updateNodeGlow(now) {
       : 0;
     const baseScale = mesh.userData.baseScale;
     const pulseScale = state.layout === "cube"
-      ? 1 + intensity * 0.1
-      : 1 + intensity * 0.06;
+      ? 1 + intensity * 0.06
+      : 1 + intensity * 0.04;
 
     mesh.material.color.copy(color);
-    mesh.material.emissive.copy(color).multiplyScalar(0.05 + intensity * 0.55);
-    mesh.material.emissiveIntensity = 1 + intensity * 0.35;
+    mesh.material.emissive.copy(color).multiplyScalar(0.04 + intensity * 0.32);
+    mesh.material.emissiveIntensity = 1 + intensity * 0.18;
     if (baseScale) {
       mesh.scale.copy(baseScale).multiplyScalar(pulseScale);
     }
@@ -861,7 +913,7 @@ function updateImplicitPhase(tracker, event) {
     if (left === 0 && right === 1 && prevLeft > 0) {
       tracker.phaseNumber += 1;
     }
-    tracker.detail = `n-${tracker.phaseNumber}`;
+    tracker.detail = `n-${Math.max(1, state.nodeCount - tracker.phaseNumber)}`;
   } else if (tracker.algorithmKey === "selectionSort") {
     if (right >= 0 && prevRight >= 0 && right < prevRight) {
       tracker.phaseNumber += 1;
@@ -963,12 +1015,18 @@ function showAnnouncement(title, detail = "", kicker = "Sort 3D", durationMs = 1
 
 async function runSort() {
   const sessionId = ++sortSession;
+  const firstAlgorithmKey = getRunnableAlgorithmKeys()[0] ?? getCurrentAlgorithmKey();
   const currentAlgorithmKey = getCurrentAlgorithmKey();
   const phaseTracker = createPhaseTracker(currentAlgorithmKey);
   const algorithmName = algorithms[currentAlgorithmKey]?.name ?? currentAlgorithmKey;
   const isSortAllFirstStage = state.sortCriterion === "all" && state.activeCriterion === "height";
   const isAlgorithmAllFirstStage = state.algorithmKey === "all"
-    && currentAlgorithmKey === (getRunnableAlgorithmKeys()[0] ?? currentAlgorithmKey);
+    && currentAlgorithmKey === firstAlgorithmKey;
+  const isSequenceContinuation = (
+    state.sortCriterion === "all" && state.activeCriterion === "hue"
+  ) || (
+    state.algorithmKey === "all" && currentAlgorithmKey !== firstAlgorithmKey
+  );
 
   if (state.algorithmKey === "all" && state.sortCriterion === "all") {
     state.playing = false;
@@ -983,6 +1041,10 @@ async function runSort() {
   }
 
   state.playing = true;
+  if (!isSequenceContinuation) {
+    elapsedBeforePause = 0;
+    ui.hudTimer.textContent = "00:00:00";
+  }
   captureRoundStartData();
   if (state.algorithmKey !== "all") {
     state.activeAlgorithmKey = state.algorithmKey;
@@ -1182,6 +1244,12 @@ function bindUi() {
     }
   });
 
+  ui.linkHeightColor.addEventListener("change", () => {
+    state.linkHeightColor = ui.linkHeightColor.checked;
+    syncNodes();
+    updateHud();
+  });
+
   ui.nodeCount.addEventListener("input", () => {
     state.nodeCount = Number.parseInt(ui.nodeCount.value, 10);
     buildAuxValues();
@@ -1291,7 +1359,7 @@ function bindUi() {
   });
 
   ui.speedUpBtn.addEventListener("click", () => {
-    state.speed = Math.min(100, state.speed + 10);
+    state.speed = Math.min(200, state.speed + 10);
     ui.speed.value = String(state.speed);
     updateHud();
   });
@@ -1349,6 +1417,7 @@ window.addEventListener("resize", () => {
 populateAlgorithms();
 bindUi();
 ui.showStartMessage.checked = state.showStartMessage;
+ui.linkHeightColor.checked = state.linkHeightColor;
 ui.colorScheme.value = state.colorScheme;
 ui.zRotation.value = String(state.zRotationSpeed);
 applyColorScheme();

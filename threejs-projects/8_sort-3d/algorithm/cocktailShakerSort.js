@@ -13,8 +13,14 @@ export const cocktailShakerSort = {
     let start = 0;
     let end = array.length - 1;
     let swapped = true;
+    let passNumber = 1;
 
     while (swapped) {
+      yield {
+        type: 'phase',
+        label: `n-${Math.max(1, array.length - passNumber)}`,
+        meta: { phaseNumber: passNumber },
+      };
       swapped = false;
       for (let i = start; i < end; i++) {
         yield { type: 'compare', indices: [i, i + 1] };
@@ -28,6 +34,12 @@ export const cocktailShakerSort = {
       if (!swapped) break;
       swapped = false;
       end--;
+      passNumber += 1;
+      yield {
+        type: 'phase',
+        label: `n-${Math.max(1, array.length - passNumber)}`,
+        meta: { phaseNumber: passNumber },
+      };
       for (let i = end; i > start; i--) {
         yield { type: 'compare', indices: [i - 1, i] };
         if (array[i - 1] > array[i]) {
@@ -38,6 +50,7 @@ export const cocktailShakerSort = {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       start++;
+      passNumber += 1;
     }
   }
 };

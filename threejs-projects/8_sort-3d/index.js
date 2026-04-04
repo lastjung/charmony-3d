@@ -203,7 +203,7 @@ scene.background = new THREE.Color(0x04060d);
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.up.set(0, 0, 1);
 camera.position.set(16, -16, 12);
-camera.lookAt(0, 0, 2);
+camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -223,7 +223,7 @@ controls.mouseButtons = {
   MIDDLE: MOUSE.DOLLY,
   RIGHT: MOUSE.ROTATE,
 };
-controls.target.set(0, 0, 2);
+controls.target.set(0, 0, 0);
 controls.update();
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
@@ -352,9 +352,26 @@ function stopSortPlayback() {
 }
 
 function getNodeGeometry() {
-  return state.shape === "sphere"
-    ? new THREE.SphereGeometry(0.38, 20, 20)
-    : new THREE.BoxGeometry(0.58, 0.44, 1);
+  if (state.shape === "sphere") {
+    return new THREE.SphereGeometry(0.38, 20, 20);
+  }
+  if (state.shape === "cylinder") {
+    const geometry = new THREE.CylinderGeometry(0.28, 0.28, 1, 18, 1);
+    geometry.rotateX(Math.PI / 2);
+    return geometry;
+  }
+  if (state.shape === "icosahedron") {
+    return new THREE.IcosahedronGeometry(0.44, 0);
+  }
+  if (state.shape === "cone") {
+    const geometry = new THREE.ConeGeometry(0.34, 1, 20, 1);
+    geometry.rotateX(Math.PI / 2);
+    return geometry;
+  }
+  if (state.shape === "octahedron") {
+    return new THREE.OctahedronGeometry(0.46, 0);
+  }
+  return new THREE.BoxGeometry(0.58, 0.44, 1);
 }
 
 function getScheme() {
@@ -486,6 +503,19 @@ function getLayoutPosition(index, count = state.nodeCount) {
     );
   }
 
+  if (state.layout === "tree") {
+    const t = count <= 1 ? 0 : index / (count - 1);
+    const turns = Math.max(3, count / 18);
+    const angle = t * Math.PI * 2 * turns;
+    const radius = (0.2 + t * 4.6) * spacing;
+    const z = 5.8 - t * 11.6;
+    return new THREE.Vector3(
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+      z
+    );
+  }
+
   const cols = Math.ceil(Math.sqrt(count));
   const rows = Math.ceil(count / cols);
   const x = index % cols;
@@ -497,27 +527,82 @@ function getLayoutPosition(index, count = state.nodeCount) {
   );
 }
 
+function getCubeEdge(count = state.nodeCount) {
+  return Math.ceil(Math.cbrt(count));
+}
+
+function getCubeCoords(index, count = state.nodeCount) {
+  const edge = getCubeEdge(count);
+  return {
+    edge,
+    x: index % edge,
+    y: Math.floor(index / edge) % edge,
+    z: Math.floor(index / (edge * edge)),
+  };
+}
+
+function getLayoutTargetZ(layout = state.layout) {
+  return layout === "grid" ? 2 : 0;
+}
+
+function alignCameraToLayout(layout = state.layout, preserveOffset = true) {
+  const nextTarget = new THREE.Vector3(0, 0, getLayoutTargetZ(layout));
+  if (preserveOffset) {
+    const orbitOffset = camera.position.clone().sub(controls.target);
+    camera.position.copy(nextTarget.clone().add(orbitOffset));
+  }
+  controls.target.copy(nextTarget);
+  controls.update();
+}
+
 function applyNodeTransform(mesh, index, value, instant = false) {
   const base = getLayoutPosition(index);
   const height = getHeightForValue(value);
+  let baseScale = new THREE.Vector3(1, 1, 1);
 
   if (state.layout === "grid") {
     mesh.position.set(base.x, base.y, height / 2);
     mesh.rotation.set(0, 0, 0);
-    mesh.scale.set(1, 1, height);
+    baseScale.set(1, 1, height);
+    mesh.scale.copy(baseScale);
   } else if (state.layout === "cube") {
+    const { edge, z } = getCubeCoords(index);
+    const layerOffset = edge <= 1 ? 0 : (z / (edge - 1)) - 0.5;
     mesh.position.copy(base);
-    mesh.rotation.set(0, 0, 0);
-    mesh.scale.setScalar(0.7 + height * 0.06);
+    mesh.position.z += layerOffset * state.spacing * 0.28;
+    mesh.rotation.set(0.12 + layerOffset * 0.1, 0.08, layerOffset * 0.14);
+    baseScale.setScalar(0.66 + height * 0.055 + Math.abs(layerOffset) * 0.12);
+    mesh.scale.copy(baseScale);
+  } else if (state.layout === "tree") {
+    const radial = new THREE.Vector3(base.x, base.y, 0);
+    const branchNormal = radial.lengthSq() > 0.0001
+      ? radial.normalize()
+      : new THREE.Vector3(0, 1, 0);
+    mesh.position.copy(base.clone().add(branchNormal.clone().multiplyScalar(height * 0.12)));
+    baseScale.setScalar(0.36 + height * 0.04);
+    mesh.scale.copy(baseScale);
+    mesh.lookAt(mesh.position.clone().add(branchNormal));
   } else {
     const normal = base.clone().normalize();
     mesh.position.copy(base.clone().add(normal.multiplyScalar(height * 0.24)));
-    mesh.scale.setScalar(0.5 + height * 0.05);
+    baseScale.setScalar(0.5 + height * 0.05);
+    mesh.scale.copy(baseScale);
     mesh.lookAt(mesh.position.clone().add(normal));
   }
 
-  mesh.material.color.copy(getColorForValue(value));
-  mesh.material.emissive.copy(mesh.material.color).multiplyScalar(0.04);
+  const color = getColorForValue(value);
+  if (state.layout === "cube") {
+    const { edge, z } = getCubeCoords(index);
+    const layerMix = edge <= 1 ? 0.12 : 0.06 + (z / (edge - 1)) * 0.18;
+    color.lerp(new THREE.Color(0xffffff), layerMix);
+  } else if (state.layout === "tree") {
+    const t = state.nodeCount <= 1 ? 0 : index / (state.nodeCount - 1);
+    color.lerp(new THREE.Color(0xfff4cc), 0.08 + (1 - t) * 0.08);
+  }
+  mesh.material.color.copy(color);
+  mesh.material.emissive.copy(color).multiplyScalar(0.06);
+  mesh.material.emissiveIntensity = 1;
+  mesh.userData.baseScale = baseScale.clone();
 
   if (instant) {
     mesh.updateMatrix();
@@ -579,11 +664,31 @@ function spreadGridTrail(indices = []) {
   }
 }
 
+function spreadCubeHalo(indices = []) {
+  if (state.layout !== "cube") return;
+  for (const index of indices) {
+    const source = getCubeCoords(index);
+    for (let i = 0; i < state.nodeCount; i++) {
+      if (i === index) continue;
+      const target = getCubeCoords(i);
+      const distance = Math.abs(source.x - target.x) + Math.abs(source.y - target.y) + Math.abs(source.z - target.z);
+      if (distance === 0) {
+        touchIndex(i, 0.2);
+      } else if (distance === 1) {
+        touchIndex(i, 0.12);
+      } else if (source.z === target.z && distance === 2) {
+        touchIndex(i, 0.06);
+      }
+    }
+  }
+}
+
 function highlightIndices(indices = [], kind = "focus") {
   const valid = indices.filter((value) => Number.isInteger(value) && value >= 0);
   const strength = kind === "move" ? 1 : 0.8;
   valid.forEach((index) => touchIndex(index, strength));
   spreadGridTrail(valid);
+  spreadCubeHalo(valid);
 
   if (valid.length > 0) {
     playNote(data[valid[0]], kind === "move");
@@ -600,9 +705,17 @@ function updateNodeGlow(now) {
     const intensity = remaining > 0
       ? Math.max(0, (remaining / duration) * pulse.strength)
       : 0;
+    const baseScale = mesh.userData.baseScale;
+    const pulseScale = state.layout === "cube"
+      ? 1 + intensity * 0.1
+      : 1 + intensity * 0.06;
 
     mesh.material.color.copy(color);
-    mesh.material.emissive.copy(color).multiplyScalar(0.04 + intensity * 0.72);
+    mesh.material.emissive.copy(color).multiplyScalar(0.05 + intensity * 0.55);
+    mesh.material.emissiveIntensity = 1 + intensity * 0.35;
+    if (baseScale) {
+      mesh.scale.copy(baseScale).multiplyScalar(pulseScale);
+    }
   });
 }
 
@@ -980,6 +1093,7 @@ function toggleLayout(nextLayout) {
   ui.layoutButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.layout === nextLayout);
   });
+  alignCameraToLayout(nextLayout);
   syncNodes();
   updateHud();
 }
@@ -1193,5 +1307,6 @@ buildAuxValues();
 resetData();
 captureRoundStartData();
 rebuildNodes();
+alignCameraToLayout(state.layout, false);
 updateHud();
 animate(performance.now());

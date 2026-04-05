@@ -16,8 +16,27 @@
     use_turntable: false
   };
   // w.ctrls = ctrls;
-  const gui = new dat.GUI();
-  gui.add(ctrls, 'use_turntable');
+  // Old GUI removed - already hidden via CSS
+  // const gui = new dat.GUI();
+  // gui.add(ctrls, 'use_turntable');
+  // gui.hide(); 
+
+  // Premium UI Integration
+  const btnPlay = document.getElementById('btn-play');
+  const btnReset = document.getElementById('btn-reset');
+  const btnTurntable = document.getElementById('btn-turntable');
+  const btnFullscreen = document.getElementById('btn-fullscreen');
+  const iconPlay = document.getElementById('icon-play');
+
+  const updatePlayIcon = () => {
+    if (stop_anim) {
+      iconPlay.innerHTML = '<path d="M8 5v14l11-7z"/>'; // Play icon
+      btnPlay.classList.remove('active');
+    } else {
+      iconPlay.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; // Pause icon
+      btnPlay.classList.add('active');
+    }
+  };
   
   controls.rotateSpeed = 1.0;
   controls.zoomSpeed = 1.2;
@@ -37,9 +56,12 @@
 
   // PARTICLES
   let p_geo = new THREE.Geometry();
-  let p_mat = new THREE.ParticleBasicMaterial({
-    size: 0.5,
-    vertexColors: true
+  let p_mat = new THREE.PointCloudMaterial({
+    size: 2.5,
+    vertexColors: THREE.VertexColors,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending // Create a subtle glow effect
   });
   let materials = [];
   let particles = [];
@@ -198,7 +220,7 @@
     i += 1;
   }
 
-  particles = new THREE.ParticleSystem(p_geo, p_mat);
+  particles = new THREE.PointCloud(p_geo, p_mat);
   scene.add(particles);
 
   function renderFrame () {
@@ -224,8 +246,46 @@
     evt.preventDefault();
     if (evt.keyCode === 32) {
       stop_anim = !stop_anim;
+      updatePlayIcon();
     }
   }
 
+  // Window Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }, false);
+
   document.addEventListener('keyup', onKeyUp, false);
+
+  // HUD Events
+  btnPlay.addEventListener('click', () => {
+    stop_anim = !stop_anim;
+    updatePlayIcon();
+  });
+
+  btnReset.addEventListener('click', () => {
+    location.reload();
+  });
+
+  btnTurntable.addEventListener('click', () => {
+    ctrls.use_turntable = !ctrls.use_turntable;
+    btnTurntable.classList.toggle('active', ctrls.use_turntable);
+  });
+
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      btnFullscreen.classList.add('active');
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        btnFullscreen.classList.remove('active');
+      }
+    }
+  });
+
+  // Initial state UI sync
+  updatePlayIcon();
 })();

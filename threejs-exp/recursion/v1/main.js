@@ -18,8 +18,13 @@
     use_turntable: true
   };
   w.ctrls = ctrls;
-  gui = new dat.GUI();
-  gui.add(ctrls, 'use_turntable');
+  
+  // Safety check for dat.GUI
+  if (typeof dat !== 'undefined' && dat.GUI) {
+    gui = new dat.GUI();
+    gui.add(ctrls, 'use_turntable');
+  }
+  
   stop_anim = false;
   controls.rotateSpeed = 1.0;
   controls.zoomSpeed = 1.2;
@@ -35,6 +40,9 @@
 
   // PARTICLES
   p_geo = new THREE.Geometry();
+  
+  // Update ParticleBasicMaterial to PointCloudMaterial for slightly newer versions if needed
+  // but keep it legacy for now as requested.
   p_mat = new THREE.ParticleBasicMaterial({
     size: 0.5,
     vertexColors: true
@@ -44,13 +52,6 @@
   mesh = {};
   stems = [];
   num_cubes = 5;
-  /*
-  Returns a random point of a sphere, evenly distributed over the sphere.
-  The sphere is centered at (x0,y0,z0) with the passed in radius.
-  The returned point is returned as a three element array [x,y,z]. 
-  
-  http://stackoverflow.com/questions/5531827/random-point-on-a-given-sphere
-  */
 
   randomSpherePoint = function(opts) {
     var phi, point, theta, u, v;
@@ -67,6 +68,7 @@
       z: opts.z + (opts.length * Math.cos(phi))
     };
   };
+  
   num_generations = 5;
   getSegment = function(generation, verts, cols, surface_pos, parent) {
     var color, new_pos, options, pos, prev_pos, render, segment, vertex;
@@ -81,7 +83,7 @@
       x: prev_pos.x,
       y: prev_pos.y,
       z: prev_pos.z,
-      length: (num_generations + 10) - generation, // min length = 4
+      length: (num_generations + 10) - generation,
       u: surface_pos.u,
       v: surface_pos.v
     };
@@ -101,8 +103,8 @@
 
       u = Math.max(Math.min(this.pos.u + Math.sin(counter) * this.pos.magnitude, 1), 0);
       v = Math.max(Math.min(this.pos.v + Math.cos(counter) * this.pos.magnitude, 1), 0);
-      theta = 2 * Math.PI * u; // between 0 and 2PI
-      phi = Math.acos(2 * v - 1); // between 0 and PI
+      theta = 2 * Math.PI * u;
+      phi = Math.acos(2 * v - 1);
       this.vertex.x = this.pos.x + (this.length * Math.sin(phi) * Math.cos(theta));
       this.vertex.y = this.pos.y + (this.length * Math.sin(phi) * Math.sin(theta));
       this.vertex.z = this.pos.z + (this.length * Math.cos(phi));
@@ -121,27 +123,25 @@
     };
     generation += 1;
     if (generation < num_generations) {
-
-      // 2 branches!
       new_pos = {
         prob: surface_pos.prob,
         magnitude: surface_pos.magnitude + 0.01,
         u: surface_pos.u + 0.01,
         v: surface_pos.v
       };
-      segment.children.push(getSegment(generation, verts, cols, new_pos, segment)); // recurse!
+      segment.children.push(getSegment(generation, verts, cols, new_pos, segment));
       new_pos = {
         prob: surface_pos.prob,
         magnitude: surface_pos.magnitude + 0.01,
         u: surface_pos.u - 0.01,
         v: surface_pos.v
       };
-      segment.children.push(getSegment(generation, verts, cols, new_pos, segment)); // recurse!
+      segment.children.push(getSegment(generation, verts, cols, new_pos, segment));
     }
     return segment;
   };
+
   getStem = function() {
-    // line
     var cols, line_geo, line_mat, pos, render, stem, verts;
 
     line_geo = new THREE.Geometry();
@@ -171,11 +171,12 @@
       verts: verts,
       stem: stem,
       line_geo: line_geo,
-      line: new THREE.Line(line_geo, line_mat, THREE.LineStrip),
+      line: new THREE.Line(line_geo, line_mat),
       cols: cols,
       render: render
     };
   };
+
   i = 0;
   num_stems = 200;
   radius = 20;
@@ -185,8 +186,10 @@
     stems.push(stem);
     i += 1;
   }
-  particles = new THREE.ParticleSystem(p_geo, p_mat);
+  
+  particles = (typeof THREE.ParticleSystem !== 'undefined') ? new THREE.ParticleSystem(p_geo, p_mat) : new THREE.Points(p_geo, p_mat);
   scene.add(particles);
+
   renderFrame = function() {
     requestAnimationFrame(renderFrame);
     counter += 0.1;
@@ -196,7 +199,7 @@
     p_geo.verticesNeedUpdate = true;
     if (ctrls.use_turntable === true) {
       camera.position.x -= (camera.position.x - 200 * Math.sin(counter * 0.02)) * 0.01;
-      camera.position.y -= (camera.position.y - 200 * Math.cos(counter * 0.02)) * 0.01;
+      camera.position.z -= (camera.position.z - 200 * Math.cos(counter * 0.02)) * 0.01;
       camera.lookAt(scene.position);
     } else {
       controls.update();
@@ -204,6 +207,7 @@
     return renderer.render(scene, camera);
   };
   renderFrame();
+
   onKeyUp = function(evt) {
     evt.preventDefault();
     if (evt.keyCode === 32) {

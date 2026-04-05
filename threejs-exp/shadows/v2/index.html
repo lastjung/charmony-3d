@@ -1,21 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset='UTF-8'/>
-	<title>Shadows v1</title> 
-	<style type="text/css">
-		body {
-			background-color: #FFFFFF;
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Shadows Quadtree Pro</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--glass-bg: rgba(255, 255, 255, 0.4);
+			--glass-border: rgba(255, 255, 255, 0.2);
+			--text-main: #1a1a1a;
+			--accent-red: #ff4d4d;
+			--accent-blue: #007AFF;
+		}
+
+		body, html {
 			margin: 0;
+			padding: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background-color: #e0e0e0;
+			font-family: 'Outfit', sans-serif;
+			color: var(--text-main);
+			user-select: none;
 		}
-		canvas { 
-			width: 100%; 
-			height: 100%; 
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
 		}
-	</style> 
-</head> 
-<body> 
+
+		/* Premium Side Box (Top-Right) */
+		#side-box {
+			position: fixed;
+			top: 20px;
+			right: 20px;
+			width: 240px;
+			padding: 16px;
+			background: var(--glass-bg);
+			backdrop-filter: blur(24px) saturate(160%);
+			-webkit-backdrop-filter: blur(24px) saturate(160%);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+			z-index: 1000;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.sidebar-grip {
+			width: 36px;
+			height: 4px;
+			background: rgba(0, 0, 0, 0.1);
+			border-radius: 4px;
+			align-self: center;
+			margin-bottom: 4px;
+		}
+
+		.setting-row {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+
+		.setting-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 0.5px;
+			color: rgba(0, 0, 0, 0.6);
+			cursor: pointer;
+		}
+
+		.setting-header:hover {
+			color: var(--accent-blue);
+		}
+
+		.setting-header.active {
+			color: var(--accent-red);
+		}
+
+		.slider-value {
+			font-family: monospace;
+			font-size: 10px;
+			opacity: 0.8;
+		}
+
+		input[type="range"] {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 100%;
+			height: 4px;
+			background: rgba(0, 0, 0, 0.1);
+			border-radius: 2px;
+			outline: none;
+		}
+
+		input[type="range"]::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			width: 12px;
+			height: 12px;
+			background: white;
+			border: 1.5px solid var(--accent-blue);
+			border-radius: 50%;
+			cursor: pointer;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			transition: all 0.2s ease;
+		}
+
+		/* Toggle Style */
+		.toggle-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			font-size: 11px;
+			font-weight: 600;
+			padding: 4px 0;
+			cursor: pointer;
+		}
+
+		.toggle-switch {
+			width: 24px;
+			height: 12px;
+			background: rgba(0, 0, 0, 0.1);
+			border-radius: 10px;
+			position: relative;
+			transition: background 0.3s ease;
+		}
+
+		.toggle-switch.active {
+			background: var(--accent-blue);
+		}
+
+		.toggle-switch::after {
+			content: '';
+			position: absolute;
+			top: 2px;
+			left: 2px;
+			width: 8px;
+			height: 8px;
+			background: white;
+			border-radius: 50%;
+			transition: left 0.3s ease;
+		}
+
+		.toggle-switch.active::after {
+			left: 14px;
+		}
+
+		/* Shortcuts Info */
+		.shortcut-hint {
+			font-size: 9px;
+			color: rgba(0, 0, 0, 0.4);
+			margin-top: 8px;
+			text-align: center;
+		}
+	</style>
+</head>
+<body>
+	<div id="side-box">
+		<div class="sidebar-grip"></div>
+		
+		<div class="setting-row">
+			<div class="setting-header" id="label-count">
+				<span>1. BALL COUNT</span>
+				<span class="slider-value" id="val-count">32</span>
+			</div>
+			<input type="range" id="input-count" min="8" max="128" value="32" />
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-header" id="label-repel">
+				<span>2. REPEL STRENGTH</span>
+				<span class="slider-value" id="val-repel">0.05</span>
+			</div>
+			<input type="range" id="input-repel" min="0" max="0.2" step="0.001" value="0.05" />
+		</div>
+
+		<div class="setting-row">
+			<div class="setting-header" id="label-friction">
+				<span>3. FRICTION</span>
+				<span class="slider-value" id="val-friction">0.95</span>
+			</div>
+			<input type="range" id="input-friction" min="0.8" max="1" step="0.01" value="0.95" />
+		</div>
+
+		<div class="toggle-row" id="toggle-grid">
+			<span>SHOW QUAD-TREE GRID</span>
+			<div class="toggle-switch" id="switch-grid"></div>
+		</div>
+
+		<div class="toggle-row" id="toggle-auto">
+			<span>AUTO SCATTER MODE</span>
+			<div class="toggle-switch" id="switch-auto"></div>
+		</div>
+
+		<div class="shortcut-hint">SPACE: Scatter / SHIFT: Gravity</div>
+	</div>
+
 	<script src="../../z_libs/three.min.js"></script>
 	<script src="../../z_libs/TrackballControls.js"></script>
 	<script src="main.js"></script>
+</body>
 </html>

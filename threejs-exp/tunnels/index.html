@@ -1,24 +1,208 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset='UTF-8'/>
-	<title>Bobby Roe - Tunnels</title> 
-	<link rel="stylesheet" href="style/style.css">
-</head> 
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Tunnel Journey Pro</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--glass-bg: rgba(10, 10, 15, 0.4);
+			--glass-border: rgba(255, 255, 255, 0.1);
+			--accent-blue: #007AFF;
+			--accent-gold: #FFCC00;
+			--text-main: #FFFFFF;
+		}
+
+		body, html {
+			margin: 0;
+			padding: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background-color: #000;
+			font-family: 'Outfit', sans-serif;
+			color: var(--text-main);
+			cursor: crosshair;
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+		}
+
+		/* Premium HUD (Bottom Bar) */
+		#apple-player {
+			position: fixed;
+			bottom: 30px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			padding: 10px 24px;
+			background: var(--glass-bg);
+			backdrop-filter: blur(32px) saturate(160%);
+			-webkit-backdrop-filter: blur(32px) saturate(160%);
+			border: 1px solid var(--glass-border);
+			border-radius: 40px;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+			z-index: 1000;
+			transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+		}
+
+		#apple-player:hover {
+			border-color: rgba(255, 255, 255, 0.2);
+			transform: translateX(-50%) translateY(-2px);
+		}
+
+		.ctrl-group {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.btn-apple {
+			background: transparent;
+			border: none;
+			color: rgba(255, 255, 255, 0.7);
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 8px;
+			border-radius: 50%;
+			transition: all 0.3s ease;
+		}
+
+		.btn-apple:hover {
+			background: rgba(255, 255, 255, 0.1);
+			color: var(--text-main);
+		}
+
+		.btn-apple.active {
+			color: var(--accent-blue);
+			text-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
+			border: 1px solid rgba(0, 122, 255, 0.3);
+		}
+
+		.btn-apple svg {
+			width: 20px;
+			height: 20px;
+			fill: currentColor;
+		}
+
+		.btn-main {
+			width: 36px;
+			height: 36px;
+			background: rgba(255, 255, 255, 0.1);
+			color: var(--text-main);
+		}
+
+		.divider {
+			width: 1px;
+			height: 24px;
+			background: var(--glass-border);
+		}
+
+		/* Crosshair Overlay */
+		#crosshair-ui {
+			position: fixed;
+			top: 0;
+			left: 0;
+			pointer-events: none;
+			z-index: 500;
+		}
+
+		/* Labels */
+		.hud-label {
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 1px;
+			opacity: 0.6;
+			text-transform: uppercase;
+		}
+
+		/* Tooltip */
+		[data-tooltip]::after {
+			content: attr(data-tooltip);
+			position: absolute;
+			bottom: -45px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: rgba(0, 0, 0, 0.85);
+			padding: 5px 12px;
+			border-radius: 6px;
+			font-size: 11px;
+			white-space: nowrap;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.2s ease;
+		}
+
+		[data-tooltip]:hover::after {
+			opacity: 1;
+		}
+
+		#title-overlay {
+			position: fixed;
+			top: 30px;
+			left: 30px;
+			font-size: 24px;
+			font-weight: 600;
+			letter-spacing: 4px;
+			color: rgba(255, 255, 255, 0.2);
+			text-transform: uppercase;
+			pointer-events: none;
+		}
+	</style>
+</head>
 <body>
-	<div id="info" class="closed">
-		<h4>This is a journey ...</h4>
-		<br>
-		Although it's a looping one.<br>
-		I hope you enjoy the generated geometry, lights, floating boxes as much as I do.<br>
-		<br>
-		See the <a href="https://github.com/bobbyroe/Three-Experiments/tree/master/tunnels">source on github</a><br>
-		<div id="nub">info</div>
+	<div id="title-overlay">Tunnels Journey</div>
+
+	<div id="apple-player">
+		<div class="ctrl-group">
+			<button id="btn-pause" class="btn-apple btn-main" data-tooltip="Pause / Resume (ESC)">
+				<svg id="icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+			</button>
+		</div>
+
+		<div class="divider"></div>
+
+		<div class="ctrl-group">
+			<button id="btn-speed-down" class="btn-apple" data-tooltip="Slower">
+				<svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+			</button>
+			<span class="hud-label" id="speed-label">1.0X</span>
+			<button id="btn-speed-up" class="btn-apple" data-tooltip="Faster">
+				<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+			</button>
+		</div>
+
+		<div class="divider"></div>
+
+		<div class="ctrl-group">
+			<button id="btn-auto-fire" class="btn-apple" data-tooltip="Auto-Laser Toggle (S + 1)">
+				<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+				<span style="font-size: 10px; margin-left: 4px;">AUTOFIRE</span>
+			</button>
+		</div>
+
+		<div class="divider"></div>
+
+		<div class="ctrl-group">
+			<button id="btn-reset" class="btn-apple" data-tooltip="Reset View">
+				<svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+			</button>
+		</div>
 	</div>
-	<div id="title">Tunnels</div>
+
 	<script src="../z_libs/three.min.js"></script>
 	<script src="../z_libs/TrackballControls.js"></script>
-	<script src="../z_libs/dat.gui.min.js"></script>
 	<script src="curve.js"></script>
 	<script src="main.js"></script>
+</body>
 </html>
